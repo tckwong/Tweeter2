@@ -3,50 +3,44 @@ import mariadb
 from flask import Flask, request, Response
 import json
 import sys
+import uuid
+# x = uuid.uuid4()
+# print(x)
+# y = str(x)[:10]
+# print(y)
 
 #instantiate Flask object
 app = Flask(__name__)
 ######################### Function List #######################################
-
-class connectMariaDb:    
+class MariaDbConnection:    
     def __init__(self):
         self.conn = None
         self.cursor = None
+    try:
+        def connect(self):
+            self.conn = mariadb.connect(
+            user=dbcreds.user, 
+            password=dbcreds.password, 
+            host=dbcreds.host, 
+            port=dbcreds.port, 
+            database=dbcreds.database)
+            self.cursor = self.conn.cursor()
+            return True
+    
+        def endConn(self):
+            if (self.cursor != None):
+                self.cursor.close()
+            else:
+                print("Cursor was never opened, nothing to close here.")
+                if (self.conn != None):
+                    self.conn.close()
+                else:
+                    print("Connection was never opened, nothing to close here.")
+    except mariadb.OperationalError:
+        print("Something wrong with the connection")
 
-    def connect(self):
-        self.conn = mariadb.connect(
-        user=dbcreds.user, 
-        password=dbcreds.password, 
-        host=dbcreds.host, 
-        port=dbcreds.port, 
-        database=dbcreds.database)
-        self.cursor = self.conn.cursor()
-        return True
-
-def endCursor(db):
-    if (db.cursor != None):
-        db.cursor.close()
-    else:
-        print("Cursor was never opened, nothing to close here.")
-        if (db.conn != None):
-            db.conn.close()
-        else:
-            print("Connection was never opened, nothing to close here.")
-# class endCursor(connectMariaDb):
-#     def __init__(self):
-#         super().__init__()
-#     def checkCursorConn(self):
-#         if (self.cursor != None):
-#             self.cursor.close()
-#         else:
-#             print("Cursor was never opened, nothing to close here.")
-#         if (self.conn != None):
-#             self.conn.close()
-#         else:
-#             print("Connection was never opened, nothing to close here.")
-        
 def getallUsers():
-    cnnct_to_db = connectMariaDb()
+    cnnct_to_db = MariaDbConnection()
     cnnct_to_db.connect()
     getParams = request.args.get("id")
     print("This is GET params", getParams)
@@ -59,82 +53,138 @@ def getallUsers():
         for result in list:
             birthday = result[5]
             birthdate = birthday.strftime("%Y-%m-%d")
-            content = {'username': result[1],
+            content = { 'username': result[1],
                         'email' : result[3],
                         'bio' : result[4],
                         'birthdate' : birthdate,
                         'imageUrl' : result[6],
                         'bannerUrl' : result[7]
-                        }       
+                        }
             user_list.append(content)
         #Check if cursor opened and close all connections
-        endCursor(cnnct_to_db)
+        cnnct_to_db.endConn()
         return Response(json.dumps(user_list),
                                     mimetype="application/json",
                                     status=200)
+    elif (getParams is not None):
+        cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [getParams])
+        userIdMatch = cnnct_to_db.cursor.fetchone()
+        print(userIdMatch)
+        user_list = []
+        content = {}
+        birthday = userIdMatch[5]
+        birthdate = birthday.strftime("%Y-%m-%d")
+        content = { 'username': userIdMatch[1],
+                    'email' : userIdMatch[3],
+                    'bio' : userIdMatch[4],
+                    'birthdate' : birthdate,
+                    'imageUrl' : userIdMatch[6],
+                    'bannerUrl' : userIdMatch[7]
+                    }       
+        user_list.append(content)
+        #Check if cursor opened and close all connections
+        cnnct_to_db.endConn()
+        return Response(json.dumps(user_list),
+                                mimetype="application/json",
+                                status=200)
     else:
         print("Incorrect GET function called")
 
-def getUniqueUser(userID):
-    cnnct_to_db = connectMariaDb()
-    cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id=?",[userID])
-    userIdMatch = cnnct_to_db.cursor.fetchone()
-    print(userIdMatch)
-    user_list = []
-    content = {}
-    birthday = userIdMatch[5]
-    birthdate = birthday.strftime("%Y-%m-%d")
-    content = {'username': userIdMatch[1],
-                'email' : userIdMatch[3],
-                'bio' : userIdMatch[4],
-                'birthdate' : birthdate,
-                'imageUrl' : userIdMatch[6],
-                'bannerUrl' : userIdMatch[7]
-                }       
-    user_list.append(content)
-    #Check if cursor opened and close all connections
-    #####################
-    return Response(json.dumps(user_list),
-                            mimetype="application/json",
-                            status=200)
-
 def createNewUser():
-    cnnct_to_db = connectMariaDb()
+    cnnct_to_db = MariaDbConnection()
     cnnct_to_db.connect()
     data = request.json
-    print("This is client data", data)
-    client_username = data.get('username')
+    print("Retrieved client data", data)
     client_email = data.get('email')
-    client_birthdate = data.get('birthdate')
+    client_username = data.get('username')
     client_password = data.get('password')
+    client_bio = data.get('bio')
+    client_birthdate = data.get('birthdate')
     
     resp = {
-        "email": data.get('email'),
-        "username": data.get('username'),
-        "password": data.get('password'),
-        "bio": data.get('bio'),
-        "birthdate": data.get('birthdate'),
+        "email": client_email,
+        "username": client_username,
+        "password": client_password,
+        "bio": client_bio,
+        "birthdate": client_birthdate,
         "imageUrl": data.get('imageUrl'),
         "bannerUrl": data.get('bannerUrl')
     }
 
-    #cnnct_to_db.cursor.execute("INSERT INTO user(email, username, password, bio, birthdate, imageUrl, bannerUrl) VALUES(?,?,?,?,?,?,?)",[resp['email'],resp['username'],resp['password'],resp['bio'],resp['birthdate'],resp['imageUrl'],resp['bannerUrl']])
     try:
         cnnct_to_db.cursor.execute("INSERT INTO user(email, username, password, birthdate) VALUES(?,?,?,?)",[client_email, client_username, client_password, client_birthdate])
+        if(cnnct_to_db.cursor.rowcount == 1):
+            print("New user register sucessful")
+            cnnct_to_db.conn.commit()
+        else:
+            print("Failed to update")     
     except mariadb.DataError:
-        print("Something wrong with your inputs")
-    except mariadb.OperationalError:
-            print("Operational error on query")
-    if(cnnct_to_db.cursor.rowcount == 1):
-        print("New user register sucessful")
-        cnnct_to_db.conn.commit()
-    else:
-        print("Failed to update")        
+        print("Something is wrong with your data inputs")
     #Check if cursor opened and close all connections
-    endCursor(cnnct_to_db)
+    finally:
+        cnnct_to_db.endConn()
     return Response(json.dumps(resp),
                             mimetype="application/json",
                             status=200)
+
+def updateUserInfo():
+    cnnct_to_db = MariaDbConnection()
+    cnnct_to_db.connect()
+    data = request.json
+    client_loginToken = data.get('loginToken')
+    #Get the user id from query
+    try:
+        cnnct_to_db.cursor.execute("SELECT user.id, username, email, bio, birthdate FROM user INNER JOIN user_session ON user_session.userId = user.id WHERE user_session.loginToken =?", [client_loginToken])
+        id_match = cnnct_to_db.cursor.fetchone()
+
+        print("ID matching", id_match)
+    except mariadb.DataError:
+        print("Something is wrong with client data inputs")
+    
+    for key in data:
+        result = data[key]
+        print("The key and value are {} = {}".format(key, result))
+        if (key != 'loginToken'):
+            cnnct_to_db.cursor.execute("UPDATE user SET ?=? WHERE id =?", [key,result,id_match[0]])
+            if(cnnct_to_db.cursor.rowcount == 1):
+                print("User updated sucessfully")
+                cnnct_to_db.conn.commit()
+            else:
+                print("Failed to update")
+        else:
+            continue
+    return Response(
+                    mimetype="application/json",
+                    status=200)
+    
+def deleteUser():
+    cnnct_to_db = MariaDbConnection()
+    cnnct_to_db.connect()
+    data = request.json
+    client_loginToken = data.get('loginToken')
+    client_password = data.get('password')
+    try:
+        #checks password and logintoken are in the same row
+        cnnct_to_db.cursor.execute("SELECT user.id FROM user INNER JOIN user_session ON user_session.userId = user.id WHERE user.password =? and user_session.loginToken =?",[client_password, client_loginToken])
+        id_match = cnnct_to_db.cursor.fetchone()
+        id_match = id_match[0]
+        cnnct_to_db.cursor.execute("DELETE FROM user WHERE id=?",[id_match])
+    
+    except mariadb.DataError:
+        print("Something is wrong with client data inputs") 
+        
+    if(cnnct_to_db.cursor.rowcount == 1):
+        print("User deleted sucessfully")
+        cnnct_to_db.conn.commit()
+    else:
+        print("Failed to update")
+
+    #Check if cursor opened and close all connections
+    cnnct_to_db.endConn()
+
+    return Response(
+                    mimetype="application/json",
+                    status=200)
 
 ################################  End of functions #################################################
 
@@ -146,58 +196,14 @@ def homepage():
 def usersApi():
     if (request.method == 'GET'):
         return getallUsers()
-    # elif (getParams != None):
-    #     # getUniqueUser(getParams)
-
     elif (request.method == 'POST'):
-        return createNewUser()
-        
-       
-    # elif (request.method == 'PATCH'):
-    #     data = request.json
-    #     print("This is client data", data)
-
-    #     animal_list[1] = data
-    #     return Response(json.dumps(animal_list),
-    #                             mimetype="application/json",
-    #                             status=200)
-    # elif (request.method == 'DELETE'):
-    #     data = request.json
-    #     print("This is client data", data)
-    #     animal_selection = data["animal"]
-        
-    #     resp = {
-    #         "animal": animal_selection
-    #     }
-    
-    #     return Response(json.dumps(resp),
-    #                             mimetype="application/json",
-    #                             status=200)
-    # else:
-    #     print("Something went wrong")
-
-# except mariadb.DataError:
-#     print("Something wrong with your data")
-# except mariadb.OperationalError: #Creating already existing table falls under OperationalError
-#     print("Something wrong with the connection")
-# except mariadb.ProgrammingError:
-#     print("Your query was wrong")
-# except mariadb.IntegrityError:
-#     print("Your query would have broken the database")
-# except ValueError:
-#     print("Please input a username")
-# except:
-#     print("Something went wrong")
-
-# finally:
-#     if (cursor != None):
-#         cursor.close()
-#     else:
-#         print("Cursor was never opened, nothing to close here.")
-#     if (conn != None):
-#         conn.close()
-#     else:
-#         print("Connection was never opened, nothing to close here.")
+        return createNewUser()    
+    elif (request.method == 'PATCH'):
+        return updateUserInfo()
+    elif (request.method == 'DELETE'):
+        return deleteUser()
+    else:
+        print("Something went wrong.")
 
 #Debug / production environments
 if (len(sys.argv) > 1):
