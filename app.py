@@ -30,17 +30,39 @@ class MariaDbConnection:
         # raise ConnectionError("Failed to connect to the database")
                 
 def get_users():
-    try:
-        cnnct_to_db = MariaDbConnection()
-        cnnct_to_db.connect()
-        getParams = request.args.get("id")
-        #data input check        
-        if (getParams is None):
-            cnnct_to_db.cursor.execute("SELECT * FROM user")
-            list = cnnct_to_db.cursor.fetchall()
+    cnnct_to_db = MariaDbConnection()
+    cnnct_to_db.connect()
+    getParams = int(request.args.get("id"))
+    #data input check        
+    if (getParams is None):
+        cnnct_to_db.cursor.execute("SELECT * FROM user")
+        list = cnnct_to_db.cursor.fetchall()
+        user_list = []
+        content = {}
+        for result in list:
+            birthday = result[5]
+            birthdate = birthday.strftime("%Y-%m-%d")
+            content = { 'username': result[1],
+                        'email' : result[3],
+                        'bio' : result[4],
+                        'birthdate' : birthdate,
+                        'imageUrl' : result[6],
+                        'bannerUrl' : result[7]
+                        }
+            user_list.append(content)
+        #Check if cursor opened and close all connections
+        cnnct_to_db.endConn()
+        return Response(json.dumps(user_list),
+                                    mimetype="application/json",
+                                    status=200)
+    elif (getParams is not None):
+        if (type(getParams) == int and getParams > 0):    
+            cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [getParams])
+            userIdMatch = cnnct_to_db.cursor.fetchall()
+            print(userIdMatch)
             user_list = []
             content = {}
-            for result in list:
+            for result in userIdMatch:
                 birthday = result[5]
                 birthdate = birthday.strftime("%Y-%m-%d")
                 content = { 'username': result[1],
@@ -50,44 +72,19 @@ def get_users():
                             'imageUrl' : result[6],
                             'bannerUrl' : result[7]
                             }
-                user_list.append(content)
-            #Check if cursor opened and close all connections
+            user_list.append(content)
+            print(content)
             cnnct_to_db.endConn()
-            return Response(json.dumps(user_list),
-                                        mimetype="application/json",
-                                        status=200)
-        elif (getParams is not None):
-            if ((type(getParams) == str) and (getParams>0)):    
-                cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [getParams])
-                userIdMatch = cnnct_to_db.cursor.fetchone()
-                print(userIdMatch)
-                user_list = []
-                content = {}
-                birthday = userIdMatch[5]
-                birthdate = birthday.strftime("%Y-%m-%d")
-                content = { 'username': userIdMatch[1],
-                            'email' : userIdMatch[3],
-                            'bio' : userIdMatch[4],
-                            'birthdate' : birthdate,
-                            'imageUrl' : userIdMatch[6],
-                            'bannerUrl' : userIdMatch[7]
-                            }       
-                user_list.append(content)
-            else:
-                print("Something went wrong")
-                return
+        else:
+            print("Something went wrong")
+            cnnct_to_db.endConn()
+            return Response(json.dumps("Invalid data input"),
+                                    mimetype="text/plain",
+                                    status=400)
 
-            return Response(json.dumps(user_list),
-                                        mimetype="application/json",
-                                        status=200)
-    except ConnectionError:
-        print("Error while attempting to connect to the database")
-    except mariadb.DataError:
-        print("Something wrong with your data")
-    except mariadb.IntegrityError:
-        print("Your query would have broken the database and we stopped it")
-    finally:
-        cnnct_to_db.endConn()
+        return Response(json.dumps(user_list),
+                                    mimetype="application/json",
+                                    status=200)
 
 def create_new_user():
     try:
@@ -173,7 +170,8 @@ def update_user_info():
                     print("Failed to update")
             else:
                 continue
-
+            #Check if cursor opened and close all connections
+            cnnct_to_db.endConn()
             return Response(
                             mimetype="application/json",
                             status=200)
@@ -211,119 +209,103 @@ def delete_user():
 
     #Check if cursor opened and close all connections
     cnnct_to_db.endConn()
-
     return Response(
                     mimetype="application/json",
                     status=200)
+######### #########Login API ############################
+# def login_user():
+#     cnnct_to_db = MariaDbConnection()
+#     cnnct_to_db.connect()
 
-def login_user():
-    cnnct_to_db = MariaDbConnection()
-    cnnct_to_db.connect()
-
-    data = request.json
-    client_email = data.get('email')
-    client_password = data.get('password')
-    if not client_email or not client_password:
-        raise ValueError("ERROR, MISSING REQUIRED INPUTS")
+#     data = request.json
+#     client_email = data.get('email')
+#     client_password = data.get('password')
+#     if not client_email or not client_password:
+#         raise ValueError("ERROR, MISSING REQUIRED INPUTS")
         
-    cnnct_to_db.cursor.execute("SELECT id, email, password FROM user WHERE email=? and password=?",[client_email,client_password])
-    id_match = cnnct_to_db.cursor.fetchone()
-    id_match = id_match[0]
-    print("id is", id_match)
+#     cnnct_to_db.cursor.execute("SELECT id, email, password FROM user WHERE email=? and password=?",[client_email,client_password])
+#     id_match = cnnct_to_db.cursor.fetchone()
+#     id_match = id_match[0]
+#     print("id is", id_match)
     
-    import uuid
-    generateUuid = uuid.uuid4().hex
-    str(generateUuid)
+#     import uuid
+#     generateUuid = uuid.uuid4().hex
+#     str(generateUuid)
 
-    try:
-        cnnct_to_db.cursor.execute("INSERT INTO user_session (userId, loginToken) VALUES(?, ?)",[id_match, generateUuid])
+#     try:
+#         cnnct_to_db.cursor.execute("INSERT INTO user_session (userId, loginToken) VALUES(?, ?)",[id_match, generateUuid])
         
-        if(cnnct_to_db.cursor.rowcount == 1):
-            cnnct_to_db.conn.commit()
-        else:
-            print("Failed to update")
-        return Response("Logged in successfully",
-                        mimetype="plain/text",
-                        status=200)
-    except mariadb.DataError:
-        print("Something wrong with your data")
-    except mariadb.IntegrityError:
-        print("Your query would have broken the database and we stopped it")
-    finally:
-        cnnct_to_db.endConn()
+#         if(cnnct_to_db.cursor.rowcount == 1):
+#             cnnct_to_db.conn.commit()
+#         else:
+#             print("Failed to update")
+#         return Response("Logged in successfully",
+#                         mimetype="plain/text",
+#                         status=200)
+#     except mariadb.DataError:
+#         print("Something wrong with your data")
+#     except mariadb.IntegrityError:
+#         print("Your query would have broken the database and we stopped it")
+#     finally:
+#         cnnct_to_db.endConn()
 
-def logout_user():
-    try:
-        cnnct_to_db = app.MariaDbConnection()
-        cnnct_to_db.connect()
-        data = request.json
-        client_loginToken = data.get('loginToken')
-        cnnct_to_db.cursor.execute("DELETE FROM user_session WHERE loginToken=?", [client_loginToken])
-    except ConnectionError:
-        print("Error while attempting to connect to the database")
-    except mariadb.IntegrityError:
-        print("Your query would have broken the database and we stopped it")
-    finally:
-        cnnct_to_db.endConn()
+# from package import user_login_mod
+# user_login_mod.login_user()
+
+
 ################################################################################
 ######Tweet API functions#############
 def get_tweets():
-    try:
-        cnnct_to_db = MariaDbConnection()
-        cnnct_to_db.connect()
-        getParams = request.args.get("id")
-        #data input check        
-        if (getParams is None):
-            cnnct_to_db.cursor.execute("SELECT * FROM tweets")
-            list = cnnct_to_db.cursor.fetchall()
-            user_list = []
-            content = {}
-            for result in list:
-                content = { 'tweetId': result[1],
-                            'userId' : result[3],
-                            'username' : result[4],
-                            'content' : result[2],
-                            'createdAt' : result[6],
-                            'userImageUrl' : result[7]
-                            }
-                user_list.append(content)
-            #Check if cursor opened and close all connections
-            cnnct_to_db.endConn()
-            return Response(json.dumps(user_list),
-                                        mimetype="application/json",
-                                        status=200)
-        elif (getParams is not None):
-            if ((type(getParams) == str) and (getParams>0)):    
-                cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [getParams])
-                userIdMatch = cnnct_to_db.cursor.fetchone()
-                print(userIdMatch)
-                user_list = []
-                content = {}
-                birthday = userIdMatch[5]
-                birthdate = birthday.strftime("%Y-%m-%d")
-                content = { 'username': userIdMatch[1],
-                            'email' : userIdMatch[3],
-                            'bio' : userIdMatch[4],
-                            'birthdate' : birthdate,
-                            'imageUrl' : userIdMatch[6],
-                            'bannerUrl' : userIdMatch[7]
-                            }       
-                user_list.append(content)
-            else:
-                print("Something went wrong")
-                return
-
-            return Response(json.dumps(user_list),
-                                        mimetype="application/json",
-                                        status=200)
-    except ConnectionError:
-        print("Error while attempting to connect to the database")
-    except mariadb.DataError:
-        print("Something wrong with your data")
-    except mariadb.IntegrityError:
-        print("Your query would have broken the database and we stopped it")
-    finally:
+    cnnct_to_db = MariaDbConnection()
+    cnnct_to_db.connect()
+    getParams = request.args.get("id")
+    #data input check
+    if (getParams is None):
+        cnnct_to_db.cursor.execute("SELECT * FROM tweet")
+        list = cnnct_to_db.cursor.fetchall()
+        tweet_list = []
+        content = {}
+        for result in list:
+            created_at = result[2]
+            created_at_serialize = created_at.strftime("%Y-%m-%d")
+            content = { 'tweetId': result[0],
+                        'userId' : result[4],
+                        'content' : result[1],
+                        'createdAt' : created_at_serialize,
+                        'tweetImageUrl' : result[3]
+                        }
+            tweet_list.append(content)
+        #Check if cursor opened and close all connections
         cnnct_to_db.endConn()
+        return Response(json.dumps(tweet_list),
+                                    mimetype="application/json",
+                                    status=200)
+    elif (getParams is not None):
+        if ((type(getParams) == str) and (getParams>0)):    
+            cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [getParams])
+            userIdMatch = cnnct_to_db.cursor.fetchone()
+            tweet_list = []
+            content = {}
+            for result in userIdMatch:
+                created_at = result[2]
+                created_at_serialize = created_at.strftime("%Y-%m-%d")
+                content = { 'tweetId': result[0],
+                            'userId' : result[4],
+                            'content' : result[1],
+                            'createdAt' : created_at_serialize,
+                            'tweetImageUrl' : result[3]
+                            }
+            tweet_list.append(content)
+            cnnct_to_db.endConn()
+        else:
+            print("Something went wrong")
+            cnnct_to_db.endConn()
+            return
+
+        return Response(json.dumps(tweet_list),
+                                    mimetype="application/json",
+                                    status=200)
+
 def post_tweet():
     pass
 def update_tweet():
@@ -349,14 +331,7 @@ def usersApi():
     else:
         print("Something went wrong.")
 
-@app.route('/api/login', methods=['POST', 'DELETE'])
-def loginApi():
-    if (request.method == 'POST'):
-        return login_user()
-    elif (request.method == 'DELETE'):
-        return logout_user()
-    else:
-        print("Something went wrong.")
+
 
 @app.route('/api/tweets', methods=['GET', 'POST', 'PATCH', 'DELETE'])
 def tweetApi():
