@@ -26,37 +26,48 @@ class MariaDbConnection:
         if (self.conn != None):
             self.conn.close()
         # raise ConnectionError("Failed to connect to the database")
-class CustomError(Exception):
-    pass
+class InvalidData(Exception):
+    def __init__(self):
+        super().__init__("Invalid data passed")
+
+class InvalidToken(Exception):
+    def __init__(self, token, message="Invalid loginToken sent"):
+        self.token = token
+        self.message = message
+        super().__init__(self.message)
+
+def validate_client_data(list, data):
+    for key in data.keys():
+        if key in list:
+            continue
+        else:
+            return Response("Incorrect data inputs",
+                    mimetype="plain/text",
+                    status=400)
 
 def validate_date(date_input):
     try:
         datetime.datetime.strptime(date_input, '%Y-%m-%d')
-    except CustomError:
-        print("Invalid date format")
-        return Response("Invalid date format",
-                                    mimetype="text/plain",
-                                    status=400)
+        raise TypeError()
+    except:
+        return False
     return True
 
 def validate_token(token_input):
-    try:
-        len(token_input) == 32
-    except CustomError:
-        return Response("Invalid LoginToken",
-                                    mimetype="text/plain",
-                                    status=403)
+    if(len(token_input) != 32):
+        raise InvalidToken()
 
 def get_tweets():
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
+    
     except ConnectionError:
         cnnct_to_db.endConn()
         return Response("Error while attempting to connect to the database",
                                     mimetype="text/plain",
                                     status=400)
-    
+
     getParams = request.args.get("id")
     #data input check
     if (getParams is None):
@@ -80,7 +91,7 @@ def get_tweets():
                                     mimetype="application/json",
                                     status=200)
     elif (getParams is not None):
-        if ((type(getParams) == str) and (getParams>0)):    
+        if ((type(getParams) == str) and (getParams>0)):
             cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [getParams])
             userIdMatch = cnnct_to_db.cursor.fetchone()
             tweet_list = []
@@ -97,9 +108,10 @@ def get_tweets():
             tweet_list.append(content)
             cnnct_to_db.endConn()
         else:
-            print("Something went wrong")
             cnnct_to_db.endConn()
-            return
+            return Response(json.dumps("Incorrect data type"),
+                                mimetype="plain/text",
+                                status=200)
 
         return Response(json.dumps(tweet_list),
                                     mimetype="application/json",
@@ -108,10 +120,11 @@ def get_tweets():
 def post_tweet():
     try:
         data = request.json
-    except CustomError:
+    except InvalidData:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
-                                    status=400) 
+                                    status=400)
+
     client_loginToken = data.get('loginToken')
     if(data.get('content') == None):
         print("Content cannot be none")
@@ -183,7 +196,12 @@ def post_tweet():
         cnnct_to_db.endConn()
 
 def update_tweet():
-    data = request.json
+    try:
+        data = request.json
+    except InvalidData:
+        return Response("Invalid data sent",
+                                    mimetype="text/plain",
+                                    status=400)
 
     if type(data.get('tweetId')) != int:
         print("Incorrect data input")
@@ -240,10 +258,9 @@ def update_tweet():
     # except mariadb.ProgrammingError:
     #     print("Your query was wrong")
 
-
 def delete_tweet():
     data = request.json
-    if type(data.get('tweetId')) != int:
+    if type(data.get('tweetId')) != int or data.get('tweetId') is None:
         print("Incorrect data input (tweetId)")
         return Response("Please check your data input",
                     mimetype="plain/text",
@@ -283,7 +300,7 @@ def delete_tweet():
                     status=200)
 
 @app.route('/api/tweets', methods=['GET', 'POST', 'PATCH', 'DELETE'])
-def tweetApi():
+def tweet_api():
     if (request.method == 'GET'):
         return get_tweets()
     elif (request.method == 'POST'):

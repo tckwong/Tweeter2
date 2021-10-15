@@ -5,8 +5,6 @@ import dbcreds
 from package import app
 import datetime
 
-class CustomError(Exception):
-    pass
 class MariaDbConnection:    
     def __init__(self):
         self.conn = None
@@ -28,21 +26,32 @@ class MariaDbConnection:
         if (self.conn != None):
             self.conn.close()
 
+class InvalidToken(Exception):
+    def __init__(self):
+        super().__init__("Invalid loginToken received")
+
+def validate_client_data(list, data):
+    for key in data.keys():
+        if key in list:
+            continue
+        else:
+            return False
+    return True
+
 def validate_date(date_input):
     try:
         datetime.datetime.strptime(date_input, '%Y-%m-%d')
-    except CustomError:
-        print("Invalid date format")
-        return Response("Invalid date format",
-                                    mimetype="text/plain",
-                                    status=400)
+    except ValueError:
+        return False
+    return True
+
 def validate_token(token_input):
     try:
-        len(token_input) == 32
-    except CustomError:
-        return Response("Invalid LoginToken",
-                                    mimetype="text/plain",
-                                    status=403)                  
+        if not (len(token_input) == 32):
+            raise InvalidToken()
+    except InvalidToken as error:
+        raise error
+
 def get_users():
     try:
         cnnct_to_db = MariaDbConnection()
@@ -54,13 +63,14 @@ def get_users():
                                     mimetype="text/plain",
                                     status=400)
 
-    try:    
-        getParams = request.args.get("id")
-    except CustomError:
-        return Response("Invalid data sent",
-                                    mimetype="text/plain",
-                                    status=400)         
-    #data input check        
+    getParams = request.args
+    checklist = ["id"]
+    if not validate_client_data(checklist,getParams):
+        return Response("Incorrect data keys received",
+                            mimetype="text/plain",
+                            status=400)
+    getParams = int(request.args.get("id"))
+    #data input check 
     if (getParams is None):
         cnnct_to_db.cursor.execute("SELECT * FROM user")
         list = cnnct_to_db.cursor.fetchall()
@@ -84,26 +94,18 @@ def get_users():
                                     mimetype="application/json",
                                     status=200)
     elif (getParams is not None):
-        try:
-            getParams = int(getParams)
-        except CustomError:
-            return Response("Invalid parameters. Must be an integer, and a valid id",
-                                    mimetype="text/plain",
-                                    status=400)
-
-        if (type(getParams) == int and getParams > 0):    
+        if (type(getParams) == int and getParams > 0):
             cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [getParams])
             userIdMatch = cnnct_to_db.cursor.fetchall()
-    
             user_list = []
             content = {}
             for result in userIdMatch:
-                birthday = result[5]
-                birthdate = birthday.strftime("%Y-%m-%d")
+                birthdate = result[5]
+                birthdate_serialized = birthdate.strftime("%Y-%m-%d")
                 content = { 'username': result[1],
                             'email' : result[3],
                             'bio' : result[4],
-                            'birthdate' : birthdate,
+                            'birthdate' : birthdate_serialized,
                             'imageUrl' : result[6],
                             'bannerUrl' : result[7]
                             }
@@ -111,7 +113,7 @@ def get_users():
             cnnct_to_db.endConn()
         else:
             cnnct_to_db.endConn()
-            return Response("Invalid data input",
+            return Response("Invalid parameters. ID Must be an integer",
                                     mimetype="text/plain",
                                     status=400)
 
@@ -122,10 +124,15 @@ def get_users():
 def create_new_user():
     try:
         data = request.json
-    except CustomError:
+        checklist = ["email", "username","password","bio","birthdate","imageUrl","bannerUrl"]
+        if not validate_client_data(checklist,data):
+            return Response("Incorrect data keys received",
+                                mimetype="text/plain",
+                                status=400)
+    except ValueError:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
-                                    status=400) 
+                                    status=400)
     client_email = data.get('email')
     client_username = data.get('username')
     client_password = data.get('password')
@@ -134,12 +141,16 @@ def create_new_user():
     client_imageUrl = data.get('imageUrl')
     client_bannerUrl = data.get('bannerUrl')
 
+    #Checks for required data in DB
     if (client_email is None or client_username is None or client_password is None or client_birthdate is None):
         return Response("Error! Missing required data",
                         mimetype="text/plain",
                         status=400)
-    validate_date(client_birthdate)
-    
+    #Checks birthdate format
+    if not validate_date(client_birthdate):
+        return Response("Invalid date format. Please check data inputs",
+                        mimetype="text/plain",
+                        status=400)
     resp = {
         "email": client_email,
         "username": client_username,
@@ -155,51 +166,66 @@ def create_new_user():
         cnnct_to_db.connect()
         cnnct_to_db.cursor.execute("INSERT INTO user(email, username, password, birthdate, bio, imageUrl, bannerUrl) VALUES(?,?,?,?,?,?,?)",[client_email,client_username,client_password,client_birthdate,client_bio,client_imageUrl,client_bannerUrl])
         if(cnnct_to_db.cursor.rowcount == 1):
-            print("New user register sucessful")
             cnnct_to_db.conn.commit()
         else:
-            print("Failed to update") 
-        
+            return Response("Failed to update",
+                                mimetype="text/plain",
+                                status=400)
         return Response(json.dumps(resp),
                                 mimetype="application/json",
-                                status=200)    
+                                status=200)  
     except ConnectionError:
         print("Error while attempting to connect to the database")
+        return Response("Error while attempting to connect to the database",
+                                mimetype="text/plain",
+                                status=444)  
     except mariadb.DataError:
         print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                                mimetype="text/plain",
+                                status=400)
     except mariadb.IntegrityError:
-        print("Your query would have broken the database and we stopped it")
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                                mimetype="text/plain",
+                                status=400)
     finally:
         cnnct_to_db.endConn()
 
-
 def update_user_info():
     data = request.json
-    print(data)
     client_loginToken = data.get('loginToken')
     validate_token(client_loginToken)
-    print("should not show")
-
-    content= {
-        "pie" : "good"
-    }
 
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
         cnnct_to_db.cursor.execute("SELECT user.id FROM user INNER JOIN user_session ON user_session.userId = user.id WHERE user_session.loginToken =?", [client_loginToken])
         id_match = cnnct_to_db.cursor.fetchone()
+        if id_match == None:
+            raise ValueError
 
-        print("ID matching?", id_match)
+    except ConnectionError:
+        cnnct_to_db.endConn()
+        print("Error while attempting to connect to the database")
+        return Response("Error while attempting to connect to the database",
+                                mimetype="text/plain",
+                                status=444)  
     except mariadb.DataError:
-        print("Something is wrong with client data inputs")
-    
+        cnnct_to_db.endConn()
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                                mimetype="text/plain",
+                                status=400)
+    except ValueError as error:
+        cnnct_to_db.endConn()
+        return Response("No match was found"+str(error),
+                                mimetype="text/plain",
+                                status=400)
     try:
         for key in data:
             result = data[key]
             if (key != 'loginToken'):
-                print("this is the raw result",result)
-                print("this is the raw key",key)
                 if (key == "email"):
                     cnnct_to_db.cursor.execute("UPDATE user SET email =? WHERE user.id=?",[result,id_match[0]])
                 elif (key == "username"):
@@ -208,33 +234,67 @@ def update_user_info():
                     cnnct_to_db.cursor.execute("UPDATE user SET bio =? WHERE user.id=?",[result,id_match[0]])
                 else:
                     print("Error happened with inputs")
+
                 if(cnnct_to_db.cursor.rowcount == 1):
-                    print("User updated sucessfully")
                     cnnct_to_db.conn.commit()
                 else:
-                    print("Failed to update")
+                    return Response("Failed to update",
+                                    mimetype="text/plain",
+                                    status=400)
             else:
                 continue
-            #Check if cursor opened and close all connections
-            cnnct_to_db.endConn()
-            
-            return Response(json.dumps(content),
-                            mimetype="application/json",
-                            status=200)
+        
+        cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id=?", [id_match[0]])
+        updated_user = cnnct_to_db.cursor.fetchone()
+        resp =  {'id': updated_user[0],
+                'username': updated_user[1],
+                'email' : updated_user[3],
+                'bio' : updated_user[4],
+                'imageUrl' : updated_user[6],
+                'bannerUrl' : updated_user[7]
+                }
+        cnnct_to_db.endConn()
+        return Response(json.dumps(resp),
+                        mimetype="application/json",
+                        status=200)
     except ConnectionError:
+        cnnct_to_db.endConn()
         return Response(json.dumps("Error while attempting to connect to the database"),
                                     mimetype="text/plain",
                                     status=400)
     except mariadb.DataError:
-        print("Something is wrong with client data inputs")
-    finally:
         cnnct_to_db.endConn()
-    
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
+    except mariadb.IntegrityError:
+        cnnct_to_db.endConn()
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
+
 def delete_user():
-    
-    data = request.json
-    client_loginToken = data.get('loginToken')
-    client_password = data.get('password')
+    try:                                
+        data = request.json
+        checklist = ["password","loginToken"]
+        if not validate_client_data(checklist,data):
+            return Response("Incorrect data keys received",
+                                mimetype="text/plain",
+                                status=400)
+        client_loginToken = data.get('loginToken')
+        validate_token(client_loginToken)
+        client_password = data.get('password')
+    except ValueError:
+        return Response("Invalid data sent",
+                                    mimetype="text/plain",
+                                    status=400)
+    for item in checklist:
+        if item is None:
+            return Response("Error! Missing required data",
+                        mimetype="text/plain",
+                        status=400)
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
@@ -251,22 +311,25 @@ def delete_user():
                 print("Failed to update")
         else:
             raise ValueError("Incorrect loginToken and password combination")
-            
-    except ConnectionError:
-        print("Error while attempting to connect to the database")
         cnnct_to_db.endConn()
+        return Response("Sucessfully deleted",
+                            mimetype="text/plain",
+                            status=204)
+    except ConnectionError:
+        cnnct_to_db.endConn()
+        print("Error while attempting to connect to the database")
+        return Response("Error while attempting to connect to the database",
+                        mimetype="text/plain",
+                        status=444)
     except mariadb.DataError:
-        print("Something is wrong with client data inputs") 
-        
-    #Check if cursor opened and close all connections
-    cnnct_to_db.endConn()
-    return Response(
-                    mimetype="plain/text",
-                    status=200)
-    
+        cnnct_to_db.endConn()
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
 
 @app.route('/api/users', methods=['GET', 'POST', 'PATCH', 'DELETE'])
-def usersApi():
+def users_api():
     if (request.method == 'GET'):
         return get_users()
     elif (request.method == 'POST'):

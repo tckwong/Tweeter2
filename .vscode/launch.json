@@ -5,10 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Module",
+            "name": "Python: Current File",
             "type": "python",
             "request": "launch",
-            "module": "user_login_api.py"
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args" : ["testing"]
+
         }
     ]
 }

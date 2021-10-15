@@ -22,4 +22,3 @@ if (len(sys.argv) > 1):
 else:
     print ("No argument was provided")
     exit()
-
