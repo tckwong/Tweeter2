@@ -1,3 +1,4 @@
+#Not catching no content
 from package import app
 from flask import request, Response
 import mariadb
@@ -191,7 +192,7 @@ def delete_tweet_like():
     client_tweetId = data.get('tweetId')
     validate_token(client_loginToken)
     #Checks for required data in DB
-    if(type(client_tweetId) == int and client_tweetId == None):
+    if(type(client_tweetId) != int or client_tweetId == None):
         return Response("Error! Missing required data",
                         mimetype="text/plain",
                         status=400)
@@ -199,13 +200,14 @@ def delete_tweet_like():
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
-        cnnct_to_db.cursor.execute("SELECT user.id from user INNER JOIN user_session ON user_session.userId = user.id WHERE loginToken=?",[client_loginToken])
-        user_match = cnnct_to_db.cursor.fetchone()
-        if user_match == None:
+        cnnct_to_db.cursor.execute("SELECT tweet_like.id, tweet_like.tweetId, loginToken FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id INNER JOIN user_session ON user_session.userId = user.id WHERE loginToken=?",[client_loginToken])
+        match = cnnct_to_db.cursor.fetchone()
+        if match == None:
             return Response("No matching results were found",
                                 mimetype="text/plain",
                                 status=400)
-        cnnct_to_db.cursor.execute("DELETE FROM tweet_like WHERE tweetId=?", [client_tweetId])
+
+        cnnct_to_db.cursor.execute("DELETE FROM tweet_like WHERE tweet_like.id=?", [match[0]])
         
         if(cnnct_to_db.cursor.rowcount == 1):
             cnnct_to_db.conn.commit()

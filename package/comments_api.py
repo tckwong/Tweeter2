@@ -57,7 +57,7 @@ def validate_token(token_input):
     except InvalidToken as error:
         raise error
 
-def get_tweets():
+def get_comments():
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
@@ -68,55 +68,54 @@ def get_tweets():
                                     mimetype="text/plain",
                                     status=400)
     params = request.args
-    params_id = request.args.get("id")
-    checklist = ["id"]
+    params_id = request.args.get("tweetId")
+    checklist = ["tweetId"]
     if not validate_client_data(checklist, params):
         return Response("Incorrect data keys received",
                             mimetype="text/plain",
                             status=400)
     if (params_id is None):
-        cnnct_to_db.cursor.execute("SELECT * FROM tweet")
+        cnnct_to_db.cursor.execute("SELECT * FROM comment")
         list = cnnct_to_db.cursor.fetchall()
-        tweet_list = []
+        comment_list = []
         content = {}
         for result in list:
-            created_at = result[2]
+            created_at = result[4]
             created_at_serialize = created_at.strftime("%Y-%m-%d %H:%M:%S")
-            content = { 'tweetId': result[0],
-                        'userId' : result[4],
-                        'content' : result[1],
-                        'createdAt' : created_at_serialize,
-                        'tweetImageUrl' : result[3]
+            content = { 'commentId': result[0],
+                        'userId' : result[1],
+                        'tweetId' : result[2],
+                        'content' : result[3],
+                        'createdAt': created_at_serialize
                         }
-            tweet_list.append(content)
+            comment_list.append(content)
         #Check if cursor opened and close all connections
         cnnct_to_db.endConn()
-        return Response(json.dumps(tweet_list),
+        return Response(json.dumps(comment_list),
                                     mimetype="application/json",
                                     status=200)
     elif (params_id is not None):
         try:
-            params_id = int(request.args.get("id"))
+            params_id = int(request.args.get("tweetId"))
         except ValueError:
             return Response(json.dumps("Incorrect datatype received"),
                                 mimetype="text/plain",
                                 status=200)
         if ((type(params_id) == int) and (params_id>0)):
-            cnnct_to_db.cursor.execute("SELECT * FROM tweet WHERE id=?", [params_id])
+            cnnct_to_db.cursor.execute("SELECT * FROM comment WHERE tweetId=?", [params_id])
             tweet_id_match = cnnct_to_db.cursor.fetchall()
-            tweet_list = []
+            comment_list = []
             content = {}
             for result in tweet_id_match:
-                created_at = result[2]
-                print(created_at)
+                created_at = result[4]
                 created_at_serialize = created_at.strftime("%Y-%m-%d %H:%M:%S")
-                content = { 'tweetId': result[0],
-                            'userId' : result[4],
-                            'content' : result[1],
-                            'createdAt' : created_at_serialize,
-                            'tweetImageUrl' : result[3]
-                            }
-            tweet_list.append(content)
+                content = { 'commentId': result[0],
+                        'userId' : result[1],
+                        'tweetId' : result[2],
+                        'content' : result[3],
+                        'createdAt': created_at_serialize
+                        }
+            comment_list.append(content)
             cnnct_to_db.endConn()
         else:
             cnnct_to_db.endConn()
@@ -124,14 +123,14 @@ def get_tweets():
                                 mimetype="text/plain",
                                 status=200)
 
-        return Response(json.dumps(tweet_list),
+        return Response(json.dumps(comment_list),
                                     mimetype="application/json",
                                     status=200)
 
-def post_tweet():
+def post_comments():
     try:
         data = request.json
-        checklist = ["loginToken", "content", "imageUrl"]
+        checklist = ["loginToken", "tweetId", "content"]
         if not validate_client_data(checklist,data):
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
@@ -144,13 +143,13 @@ def post_tweet():
     client_loginToken = data.get('loginToken')
     validate_token(client_loginToken)
 
-    if(data.get('content') == None):
-        return Response("Content cannot be none",
+    if(data.get('content') == None or data.get('tweetId') == None):
+        return Response("Required data missing",
                                 mimetype="text/plain",
                                 status=400)
     else:
         client_content = data.get('content')
-        client_imageUrl = data.get('imageUrl')
+        client_tweetId = data.get('tweetId')
 
     try:
         cnnct_to_db = MariaDbConnection()
@@ -165,40 +164,30 @@ def post_tweet():
                                 mimetype="text/plain",
                                 status=400)
         
-        dict_keys = ("userId", "username", "userImageUrl")
-        result_dict = dict(zip(dict_keys,user_id_match))
-        #retrieve user information from DB
-        db_id = result_dict["userId"]
-        db_username = result_dict["username"]
-        db_imageUrl = result_dict["userImageUrl"]
-        
+        db_id = user_id_match[0]
+        db_username = user_id_match[1]
+
         #get current date and time
         cur_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        cnnct_to_db.cursor.execute("INSERT INTO tweet(content,createdAt,tweetImageUrl,userId) VALUES(?,?,?,?)",[client_content,cur_datetime,client_imageUrl,user_id_match[0]])
+        cnnct_to_db.cursor.execute("INSERT INTO comment(userId,tweetId,content,createdAt) VALUES(?,?,?,?)",[db_id,client_tweetId,client_content,cur_datetime])
         if(cnnct_to_db.cursor.rowcount == 1):
-            print("Tweet posted sucessfully")
             cnnct_to_db.conn.commit()
         else:
             return Response("Failed to update",
                                 mimetype="text/plain",
                                 status=400)
-        cnnct_to_db.cursor.execute("SELECT * FROM tweet")
-        new_tweet_result = cnnct_to_db.cursor.fetchone()
-        client_dict_keys = ("id", "content", "createdAt", "tweetImageUrl","userId")
-        
-        result_tweet_dict = dict(zip(client_dict_keys,new_tweet_result))
-        result_created_serialize = result_tweet_dict['createdAt'].strftime('%Y-%m-%d %H:%M:%S')
+        cnnct_to_db.cursor.execute("SELECT * FROM comment")
+        new_comment_result = cnnct_to_db.cursor.fetchone()
+
         resp = {
-                "tweetId" : "stringggg",
+                "commentId": new_comment_result[0],
+                "tweetId" : client_tweetId,
                 "userId" : db_id,
                 "username" : db_username,
-                "userImageUrl" : db_imageUrl,
-                "content" : result_tweet_dict["content"],
-                "createdAt" : result_created_serialize,
-                "imageUrl" : result_tweet_dict["tweetImageUrl"]
+                "content" : new_comment_result[3],
+                "createdAt" : cur_datetime
         }
-
         return Response(json.dumps(resp),
                                 mimetype="application/json",
                                 status=201)
@@ -220,10 +209,10 @@ def post_tweet():
     finally:
         cnnct_to_db.endConn()
 
-def update_tweet():
+def update_comments():
     try:
         data = request.json
-        checklist = ["loginToken", "tweetId", "content"]
+        checklist = ["loginToken", "commentId", "content"]
         if not validate_client_data(checklist,data):
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
@@ -233,25 +222,32 @@ def update_tweet():
                                     mimetype="text/plain",
                                     status=400)
 
-    if type(data.get('tweetId')) != int or data.get('content') == None:
+    if type(data.get('commentId')) != int or data.get('content') == None:
         return Response("Please check your data input",
                     mimetype="plain/text",
                     status=400)
     else:
         client_loginToken = data.get('loginToken')
-        client_tweetId = data.get('tweetId')
+        client_commentId = data.get('commentId')
         client_content = data.get('content')
-    
     validate_token(client_loginToken)
+    
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
+        
         #Check for tweet ownership
-        cnnct_to_db.cursor.execute("SELECT tweet.id, tweet.userId, content, loginToken FROM tweet INNER JOIN user ON user.id = tweet.userId INNER JOIN user_session ON tweet.userId = user_session.userId WHERE loginToken =? and tweet.id =?",[client_loginToken,client_tweetId])
+        cnnct_to_db.cursor.execute("SELECT comment.createdAt, comment.userId, comment.tweetId, content, username FROM comment INNER JOIN user ON user.id = comment.userId INNER JOIN user_session ON user.id = user_session.userId WHERE loginToken =? and comment.id =?",[client_loginToken,client_commentId])
         
         info_match = cnnct_to_db.cursor.fetchone()
         if not info_match:
             raise ValueError("No matching data found")
+        birthdate_serialized = info_match[0].strftime('%Y-%m-%d %H:%M:%S')
+        match_createdAt = birthdate_serialized
+        match_userId = info_match[1]
+        match_tweetId = info_match[2]
+        match_content = info_match[3]
+        match_username = info_match[4]
         print("Matching info", info_match)
     except ConnectionError:
         print("Error while attempting to connect to the database")
@@ -268,8 +264,8 @@ def update_tweet():
         return Response("Something wrong with your data",
                         mimetype="text/plain",
                         status=400)
-    
-    cnnct_to_db.cursor.execute("UPDATE tweet SET content =? WHERE id=?",[client_content,client_tweetId])
+
+    cnnct_to_db.cursor.execute("UPDATE comment SET content =? WHERE id=?",[client_content,client_commentId])
     
     if(cnnct_to_db.cursor.rowcount == 1):
         cnnct_to_db.conn.commit()  
@@ -280,34 +276,42 @@ def update_tweet():
     cnnct_to_db.endConn()
     
     resp = {
-        "tweetId" : client_tweetId,
-        "content" : client_content
+        "commentId": client_commentId,
+        "tweetId": match_tweetId,
+        "userId": match_userId,
+        "username": match_username,
+        "content": match_content,
+        "createdAt": match_createdAt
     }
-
     return Response(json.dumps(resp),
                     mimetype="application/json",
                     status=200)
 
-def delete_tweet():
+def delete_comments():
     data = request.json
-    if type(data.get('tweetId')) != int or data.get('tweetId') is None:
+    checklist = ["loginToken", "commentId"]
+    if not validate_client_data(checklist,data):
+            return Response("Incorrect data keys received",
+                                mimetype="text/plain",
+                                status=400)
+    if type(data.get('commentId')) != int or data.get('commentId') is None:
         return Response("Please check your data input",
                     mimetype="text/plain",
                     status=400)
 
     client_loginToken = data.get('loginToken')
-    client_tweetId = data.get('tweetId')
+    client_commentId = data.get('commentId')
     validate_token(client_loginToken)
     
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
         #checks password and logintoken are in the same row
-        cnnct_to_db.cursor.execute("SELECT tweet.id, tweet.userId, content, loginToken FROM tweet INNER JOIN user ON user.id = tweet.userId INNER JOIN user_session ON tweet.userId = user_session.userId WHERE loginToken =? and tweet.id =?",[client_loginToken,client_tweetId])
+        cnnct_to_db.cursor.execute("SELECT comment.userId, content FROM comment INNER JOIN user ON user.id = comment.userId INNER JOIN user_session ON user.id = user_session.userId WHERE loginToken =? and comment.id =?",[client_loginToken,client_commentId])
         id_match = cnnct_to_db.cursor.fetchone()
         if id_match != None:
             id_match = id_match[0]
-            cnnct_to_db.cursor.execute("DELETE FROM tweet WHERE id=?",[client_tweetId])
+            cnnct_to_db.cursor.execute("DELETE FROM comment WHERE id=?",[client_commentId])
             if(cnnct_to_db.cursor.rowcount == 1):
                 cnnct_to_db.conn.commit()
             else:
@@ -324,26 +328,32 @@ def delete_tweet():
                         mimetype="text/plain",
                         status=444)  
     except mariadb.DataError:
+        cnnct_to_db.endConn()
         print("Something wrong with your data")
         return Response("Something wrong with your data",
                         mimetype="text/plain",
                         status=400)
-        
+    except mariadb.IntegrityError:
+        cnnct_to_db.endConn()
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
     #Check if cursor opened and close all connections
     cnnct_to_db.endConn()
-    return Response("Sucessfully deleted tweet",
+    return Response("Sucessfully deleted comment",
                     mimetype="text/plain",
                     status=204)
 
-@app.route('/api/tweets', methods=['GET', 'POST', 'PATCH', 'DELETE'])
-def tweet_api():
+@app.route('/api/comments', methods=['GET', 'POST', 'PATCH', 'DELETE'])
+def comment_api():
     if (request.method == 'GET'):
-        return get_tweets()
+        return get_comments()
     elif (request.method == 'POST'):
-        return post_tweet()    
+        return post_comments()    
     elif (request.method == 'PATCH'):
-        return update_tweet()
+        return update_comments()
     elif (request.method == 'DELETE'):
-        return delete_tweet()
+        return delete_comments()
     else:
         print("Something went wrong.")
