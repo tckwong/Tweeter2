@@ -115,7 +115,7 @@ def login_user():
 
     return Response("Log in posted",
                     mimetype="text/plain",
-                    status=200)
+                    status=201)
 
 def logout_user():
     try:
@@ -178,7 +178,7 @@ def logout_user():
         cnnct_to_db.conn.commit()
         return Response("Logged out successfully",
                         mimetype="text/plain",
-                        status=200)
+                        status=204)
     except ConnectionError:
         print("Error while attempting to connect to the database")
         return Response("Error while attempting to connect to the database",

@@ -63,22 +63,21 @@ def get_users():
                                     mimetype="text/plain",
                                     status=400)
 
-    getParams = request.args
+    params = request.args
+    params_id = request.args.get("id")
     checklist = ["id"]
-    if not validate_client_data(checklist,getParams):
+    if not validate_client_data(checklist,params):
         return Response("Incorrect data keys received",
                             mimetype="text/plain",
                             status=400)
-    getParams = int(request.args.get("id"))
-    #data input check 
-    if (getParams is None):
+
+    if (params_id is None):
         cnnct_to_db.cursor.execute("SELECT * FROM user")
         list = cnnct_to_db.cursor.fetchall()
         user_list = []
         content = {}
         for result in list:
-            birthday = result[5]
-            birthdate = birthday.strftime("%Y-%m-%d")
+            birthdate = result[5].strftime("%Y-%m-%d")
             content = { 'id': result[0],
                         'username': result[1],
                         'email' : result[3],
@@ -93,15 +92,21 @@ def get_users():
         return Response(json.dumps(user_list),
                                     mimetype="application/json",
                                     status=200)
-    elif (getParams is not None):
-        if (type(getParams) == int and getParams > 0):
-            cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [getParams])
+    elif (params_id is not None):
+        try:
+            params_id = int(request.args.get("id"))
+        except ValueError:
+            return Response("Incorrect datatype received",
+                                        mimetype="text/plain",
+                                        status=400)
+    
+        if (type(params_id) == int and params_id > 0):
+            cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [params_id])
             userIdMatch = cnnct_to_db.cursor.fetchall()
             user_list = []
             content = {}
             for result in userIdMatch:
-                birthdate = result[5]
-                birthdate_serialized = birthdate.strftime("%Y-%m-%d")
+                birthdate_serialized = result[5].strftime("%Y-%m-%d")
                 content = { 'username': result[1],
                             'email' : result[3],
                             'bio' : result[4],
@@ -173,7 +178,7 @@ def create_new_user():
                                 status=400)
         return Response(json.dumps(resp),
                                 mimetype="application/json",
-                                status=200)  
+                                status=201)  
     except ConnectionError:
         print("Error while attempting to connect to the database")
         return Response("Error while attempting to connect to the database",
@@ -308,7 +313,9 @@ def delete_user():
                 print("User deleted sucessfully")
                 cnnct_to_db.conn.commit()
             else:
-                print("Failed to update")
+                return Response("Failed to update",
+                                mimetype="text/plain",
+                                status=400)
         else:
             raise ValueError("Incorrect loginToken and password combination")
         cnnct_to_db.endConn()

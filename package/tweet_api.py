@@ -25,37 +25,37 @@ class MariaDbConnection:
             self.cursor.close()
         if (self.conn != None):
             self.conn.close()
-        # raise ConnectionError("Failed to connect to the database")
+
 class InvalidData(Exception):
     def __init__(self):
         super().__init__("Invalid data passed")
 
 class InvalidToken(Exception):
-    def __init__(self, token, message="Invalid loginToken sent"):
-        self.token = token
-        self.message = message
-        super().__init__(self.message)
+    def __init__(self):
+        super().__init__("Invalid loginToken received")
 
 def validate_client_data(list, data):
     for key in data.keys():
         if key in list:
             continue
         else:
-            return Response("Incorrect data inputs",
-                    mimetype="plain/text",
-                    status=400)
+            return False
+    return True
 
 def validate_date(date_input):
     try:
-        datetime.datetime.strptime(date_input, '%Y-%m-%d')
+        datetime.datetime.strptime(date_input, '%Y-%m-%d %H:%M:%S')
         raise TypeError()
     except:
         return False
     return True
 
 def validate_token(token_input):
-    if(len(token_input) != 32):
-        raise InvalidToken()
+    try:
+        if not (len(token_input) == 32):
+            raise InvalidToken()
+    except InvalidToken as error:
+        raise error
 
 def get_tweets():
     try:
@@ -67,10 +67,14 @@ def get_tweets():
         return Response("Error while attempting to connect to the database",
                                     mimetype="text/plain",
                                     status=400)
-
-    getParams = request.args.get("id")
-    #data input check
-    if (getParams is None):
+    params = request.args
+    params_id = request.args.get("id")
+    checklist = ["id"]
+    if not validate_client_data(checklist, params):
+        return Response("Incorrect data keys received",
+                            mimetype="text/plain",
+                            status=400)
+    if (params_id is None):
         cnnct_to_db.cursor.execute("SELECT * FROM tweet")
         list = cnnct_to_db.cursor.fetchall()
         tweet_list = []
@@ -90,15 +94,22 @@ def get_tweets():
         return Response(json.dumps(tweet_list),
                                     mimetype="application/json",
                                     status=200)
-    elif (getParams is not None):
-        if ((type(getParams) == str) and (getParams>0)):
-            cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [getParams])
-            userIdMatch = cnnct_to_db.cursor.fetchone()
+    elif (params_id is not None):
+        try:
+            params_id = int(request.args.get("id"))
+        except ValueError:
+            return Response(json.dumps("Incorrect datatype received"),
+                                mimetype="text/plain",
+                                status=200)
+        if ((type(params_id) == int) and (params_id>0)):
+            cnnct_to_db.cursor.execute("SELECT * FROM tweet WHERE id=?", [params_id])
+            tweet_id_match = cnnct_to_db.cursor.fetchall()
             tweet_list = []
             content = {}
-            for result in userIdMatch:
+            for result in tweet_id_match:
                 created_at = result[2]
-                created_at_serialize = created_at.strftime("%Y-%m-%d")
+                print(created_at)
+                created_at_serialize = created_at.strftime("%Y-%m-%d %H:%M:%S")
                 content = { 'tweetId': result[0],
                             'userId' : result[4],
                             'content' : result[1],
@@ -109,8 +120,8 @@ def get_tweets():
             cnnct_to_db.endConn()
         else:
             cnnct_to_db.endConn()
-            return Response(json.dumps("Incorrect data type"),
-                                mimetype="plain/text",
+            return Response(json.dumps("Incorrect data type received"),
+                                mimetype="text/plain",
                                 status=200)
 
         return Response(json.dumps(tweet_list),
@@ -120,14 +131,20 @@ def get_tweets():
 def post_tweet():
     try:
         data = request.json
+        checklist = ["loginToken", "content", "imageUrl"]
+        if not validate_client_data(checklist,data):
+            return Response("Incorrect data keys received",
+                                mimetype="text/plain",
+                                status=400)
     except InvalidData:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
                                     status=400)
 
     client_loginToken = data.get('loginToken')
+    validate_token(client_loginToken)
+
     if(data.get('content') == None):
-        print("Content cannot be none")
         return Response("Content cannot be none",
                                 mimetype="text/plain",
                                 status=400)
@@ -135,76 +152,88 @@ def post_tweet():
         client_content = data.get('content')
         client_imageUrl = data.get('imageUrl')
 
-    validate_token(client_loginToken)
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
 
-        #checkloginToken and get Id
+        #checkloginToken and get user Id
         cnnct_to_db.cursor.execute("SELECT user.id, username, imageUrl FROM user INNER JOIN user_session ON user_session.userId = user.id WHERE user_session.loginToken =?", [client_loginToken])
-        user_login_match = cnnct_to_db.cursor.fetchone()
-        #check data inputs
-        if (user_login_match != None):
-            print("successfully found match")
-        else:
-            return Response("Invalid data sent",
+        user_id_match = cnnct_to_db.cursor.fetchone()
+        #check for a row match
+        if user_id_match == None:
+            return Response("No matching results were found",
                                 mimetype="text/plain",
                                 status=400)
-        dict_keys = ("userId", "username", "userImageUrl")
         
-        result_dict = dict(zip(dict_keys,user_login_match))
-        print(result_dict)
+        dict_keys = ("userId", "username", "userImageUrl")
+        result_dict = dict(zip(dict_keys,user_id_match))
+        #retrieve user information from DB
         db_id = result_dict["userId"]
         db_username = result_dict["username"]
         db_imageUrl = result_dict["userImageUrl"]
         
         #get current date and time
         cur_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(cur_datetime)
-        cnnct_to_db.cursor.execute("INSERT INTO tweet(content,createdAt,tweetImageUrl,userId) VALUES(?,?,?,?)",[client_content,cur_datetime,client_imageUrl,user_login_match[0]])
+
+        cnnct_to_db.cursor.execute("INSERT INTO tweet(content,createdAt,tweetImageUrl,userId) VALUES(?,?,?,?)",[client_content,cur_datetime,client_imageUrl,user_id_match[0]])
         if(cnnct_to_db.cursor.rowcount == 1):
             print("Tweet posted sucessfully")
             cnnct_to_db.conn.commit()
         else:
-            print("Failed to update")
+            return Response("Failed to update",
+                                mimetype="text/plain",
+                                status=400)
         cnnct_to_db.cursor.execute("SELECT * FROM tweet")
         new_tweet_result = cnnct_to_db.cursor.fetchone()
         client_dict_keys = ("id", "content", "createdAt", "tweetImageUrl","userId")
         
         result_tweet_dict = dict(zip(client_dict_keys,new_tweet_result))
-        print(result_tweet_dict)
+        result_created_serialize = result_tweet_dict['createdAt'].strftime('%Y-%m-%d %H:%M:%S')
         resp = {
-                "tweetId" : user_login_match[0],
+                "tweetId" : "stringggg",
                 "userId" : db_id,
                 "username" : db_username,
                 "userImageUrl" : db_imageUrl,
                 "content" : result_tweet_dict["content"],
-                "createdAt" : result_tweet_dict["createdAt"],
+                "createdAt" : result_created_serialize,
                 "imageUrl" : result_tweet_dict["tweetImageUrl"]
         }
 
         return Response(json.dumps(resp),
                                 mimetype="application/json",
-                                status=200)
+                                status=201)
     except ConnectionError:
         print("Error while attempting to connect to the database")
+        return Response("Error while attempting to connect to the database",
+                        mimetype="text/plain",
+                        status=444)  
     except mariadb.DataError:
         print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
     except mariadb.IntegrityError:
-        print("Your query would have broken the database and we stopped it")
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
     finally:
         cnnct_to_db.endConn()
 
 def update_tweet():
     try:
         data = request.json
-    except InvalidData:
+        checklist = ["loginToken", "tweetId", "content"]
+        if not validate_client_data(checklist,data):
+            return Response("Incorrect data keys received",
+                                mimetype="text/plain",
+                                status=400)
+    except ValueError:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
                                     status=400)
 
-    if type(data.get('tweetId')) != int:
-        print("Incorrect data input")
+    if type(data.get('tweetId')) == str and data.get('content') == None:
         return Response("Please check your data input",
                     mimetype="plain/text",
                     status=400)
@@ -221,24 +250,33 @@ def update_tweet():
         cnnct_to_db.cursor.execute("SELECT tweet.id, tweet.userId, content, loginToken FROM tweet INNER JOIN user ON user.id = tweet.userId INNER JOIN user_session ON tweet.userId = user_session.userId WHERE loginToken =? and tweet.id =?",[client_loginToken,client_tweetId])
         
         info_match = cnnct_to_db.cursor.fetchone()
-                
+        if not info_match:
+            raise ValueError("No matching data found")
         print("Matching info", info_match)
     except ConnectionError:
         print("Error while attempting to connect to the database")
+        return Response("Error while attempting to connect to the database",
+                        mimetype="text/plain",
+                        status=444)  
     except mariadb.DataError:
-        print("Something is wrong with client data inputs")
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
     except mariadb.IntegrityError:
-        print("Your query would have broken the database and we stopped it")
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
     
     cnnct_to_db.cursor.execute("UPDATE tweet SET content =? WHERE id=?",[client_content,client_tweetId])
     
     if(cnnct_to_db.cursor.rowcount == 1):
-        cnnct_to_db.conn.commit()
-        print("Tweet updated sucessfully")         
+        cnnct_to_db.conn.commit()  
     else:
-        print("Failed to update")
-            
-    #Check if cursor opened and close all connections
+        return Response("Failed to update",
+                                mimetype="text/plain",
+                                status=400)
     cnnct_to_db.endConn()
     
     resp = {
@@ -249,25 +287,16 @@ def update_tweet():
     return Response(json.dumps(resp),
                     mimetype="application/json",
                     status=200)
-    # except mariadb.DataError:
-    #     print("Something is wrong with client data inputs")
-    # except mariadb.IntegrityError:
-    #     print("Your query would have broken the database and we stopped it")
-    # except mariadb.OperationalError:
-    #     print("Something wrong with the operation of your query")
-    # except mariadb.ProgrammingError:
-    #     print("Your query was wrong")
 
 def delete_tweet():
     data = request.json
     if type(data.get('tweetId')) != int or data.get('tweetId') is None:
-        print("Incorrect data input (tweetId)")
         return Response("Please check your data input",
-                    mimetype="plain/text",
+                    mimetype="text/plain",
                     status=400)
+
     client_loginToken = data.get('loginToken')
     client_tweetId = data.get('tweetId')
-    
     validate_token(client_loginToken)
     
     try:
@@ -280,24 +309,31 @@ def delete_tweet():
             id_match = id_match[0]
             cnnct_to_db.cursor.execute("DELETE FROM tweet WHERE id=?",[client_tweetId])
             if(cnnct_to_db.cursor.rowcount == 1):
-                print("User deleted sucessfully")
                 cnnct_to_db.conn.commit()
             else:
-                print("Failed to update")
+                return Response("Failed to update",
+                                mimetype="text/plain",
+                                status=400)
         else:
-            raise ValueError("Incorrect loginToken and password combination")
+            raise ValueError("No matching results found")
             
     except ConnectionError:
-        print("Error while attempting to connect to the database")
         cnnct_to_db.endConn()
+        print("Error while attempting to connect to the database")
+        return Response("Error while attempting to connect to the database",
+                        mimetype="text/plain",
+                        status=444)  
     except mariadb.DataError:
-        print("Something is wrong with client data inputs") 
+        print("Something wrong with your data")
+        return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
         
     #Check if cursor opened and close all connections
     cnnct_to_db.endConn()
     return Response("Sucessfully deleted tweet",
                     mimetype="plain/text",
-                    status=200)
+                    status=204)
 
 @app.route('/api/tweets', methods=['GET', 'POST', 'PATCH', 'DELETE'])
 def tweet_api():
