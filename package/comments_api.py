@@ -154,9 +154,12 @@ def post_comments():
             'loginToken' : str,
             'content' : str,
             }
-    
         check_type(dict,data)
-        
+        char_limit_dict = {
+            'content': 150,
+            'imageUrl':100
+        }
+        check_char_len(char_limit_dict,data)
     except InvalidData:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
@@ -242,10 +245,10 @@ def update_comments():
         dict={
             'loginToken' : str,
             'content' : str,
-            'tweetId' : int
+            'commentId' : int
             }
         char_limit_dict = {
-            'content': 5000
+            'content': 150
         }
         check_type(dict,data)
         check_char_len(char_limit_dict,data)

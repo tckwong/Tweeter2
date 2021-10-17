@@ -151,7 +151,12 @@ def logout_user():
             return Response("Incorrect data keys received",
                                     mimetype="text/plain",
                                     status=400)
-                                    
+        char_limit_dict = {
+            'password': 20,
+        }
+
+        check_char_len(char_limit_dict,data)  
+
         client_loginToken = data.get('loginToken')
         client_password = data.get('password')
         validate_token(client_loginToken)

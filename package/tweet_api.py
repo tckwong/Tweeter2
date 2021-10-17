@@ -169,7 +169,8 @@ def post_tweet():
             'imageUrl' : str,
             }
         char_limit_dict = {
-            'username': 20,
+            'content': 200,
+            'imageUrl':100
         }
         check_type(dict,data)
         check_char_len(char_limit_dict,data)
@@ -272,8 +273,9 @@ def update_tweet():
         'loginToken' : str
         }
     char_limit_dict = {
-        'username': 20,
-    }
+            'content': 200,
+            'imageUrl':100
+        }
     check_type(dict,data)
     check_char_len(char_limit_dict,data)
 

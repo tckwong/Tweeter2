@@ -155,10 +155,16 @@ def post_tweet_like():
         return Response("Invalid data sent",
                                     mimetype="text/plain",
                                     status=400)
-    
+    dict={  
+        'loginToken' : str,
+        'tweetId' : int,
+        }
+    check_type(dict,data)
+
     client_loginToken = data.get('loginToken')
     client_tweetId = data.get('tweetId')
     validate_token(client_loginToken)
+
     #Checks for required data in DB
     if(type(client_tweetId) == int and client_tweetId == None):
         return Response("Error! Missing required data",
@@ -195,8 +201,8 @@ def post_tweet_like():
                                 mimetype="text/plain",
                                 status=400)
     except mariadb.IntegrityError:
-        print("Something wrong with your data")
-        return Response("Something wrong with your data",
+        print("You cannot like more than once/ commentId does not exist")
+        return Response("You cannot like more than once/ commentId does not exist",
                                 mimetype="text/plain",
                                 status=400)
     finally:
