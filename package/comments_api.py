@@ -57,6 +57,20 @@ def validate_token(token_input):
     except InvalidToken as error:
         raise error
 
+def check_type(mydict, data):
+    for x in data.keys():
+        found_key = mydict.get(x)
+        chk = isinstance(data.get(x), found_key)
+        if not chk:
+            raise ValueError("Please check your inputs. Type error was found.")
+
+def check_char_len(mydict, data):
+    for item in data.keys():
+        found_key = mydict.get(item)
+        if(type(data.get(item)) == str and found_key != None):
+            if(len(data.get(item)) > found_key):
+                raise ValueError("Please check your inputs. Data is out of bounds")
+
 def get_comments():
     try:
         cnnct_to_db = MariaDbConnection()
@@ -101,7 +115,7 @@ def get_comments():
             return Response(json.dumps("Incorrect datatype received"),
                                 mimetype="text/plain",
                                 status=200)
-        if ((type(params_id) == int) and (params_id>0)):
+        if ((0< params_id<99999999)):
             cnnct_to_db.cursor.execute("SELECT * FROM comment WHERE tweetId=?", [params_id])
             tweet_id_match = cnnct_to_db.cursor.fetchall()
             comment_list = []
@@ -135,6 +149,14 @@ def post_comments():
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
+        dict={
+            'tweetId' : int,
+            'loginToken' : str,
+            'content' : str,
+            }
+    
+        check_type(dict,data)
+        
     except InvalidData:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
@@ -217,6 +239,18 @@ def update_comments():
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
+        dict={
+            'loginToken' : str,
+            'content' : str,
+            'tweetId' : int
+            }
+        char_limit_dict = {
+            'content': 5000
+        }
+        check_type(dict,data)
+        check_char_len(char_limit_dict,data)
+
+        
     except ValueError:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
@@ -294,6 +328,13 @@ def delete_comments():
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
+    dict={
+        'commentId' : int,
+        'loginToken' : str
+        }
+
+    check_type(dict,data)
+    
     if type(data.get('commentId')) != int or data.get('commentId') is None:
         return Response("Please check your data input",
                     mimetype="text/plain",

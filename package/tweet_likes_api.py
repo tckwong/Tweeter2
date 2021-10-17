@@ -1,4 +1,3 @@
-#Not catching no content
 from package import app
 from flask import request, Response
 import mariadb
@@ -47,6 +46,20 @@ def validate_token(token_input):
     except InvalidToken as error:
         raise error
 
+def check_type(mydict, data):
+    for x in data.keys():
+        found_key = mydict.get(x)
+        chk = isinstance(data.get(x), found_key)
+        if not chk:
+            raise ValueError("Please check your inputs. Type error was found.")
+
+def check_char_len(mydict, data):
+    for item in data.keys():
+        found_key = mydict.get(item)
+        if(type(data.get(item)) == str and found_key != None):
+            if(len(data.get(item)) > found_key):
+                raise ValueError("Please check your inputs. Data is out of bounds")
+
 def get_tweet_likes():
     params = request.args
     params_id = request.args.get("id")
@@ -67,6 +80,7 @@ def get_tweet_likes():
     if (params_id is None):
         cnnct_to_db.cursor.execute("SELECT tweet_like.tweetId, tweet_like.id, username FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id")
         list = cnnct_to_db.cursor.fetchall()
+        
         tweet_like_list = []
         content = {}
     
@@ -89,14 +103,27 @@ def get_tweet_likes():
             return Response("Incorrect datatype received",
                                         mimetype="text/plain",
                                         status=400)
-        if (type(params_id) == int and params_id > 0):    
-            cnnct_to_db.cursor.execute("SELECT tweet_like.tweetId, tweet_like.id, username FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id WHERE tweetId=? ", [params_id])
-            tweet_id_match = cnnct_to_db.cursor.fetchall()
+        if ((0< params_id<99999999)):
+            try:
+                cnnct_to_db.cursor.execute("SELECT tweet_like.tweetId, tweet_like.id, username FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id WHERE tweetId=? ", [params_id])
+                tweet_id_match = cnnct_to_db.cursor.fetchall()
 
-            if(cnnct_to_db.cursor.rowcount == 0):
-                return Response("No results found",
-                                mimetype="plain/text",
+                if(cnnct_to_db.cursor.rowcount == 0):
+                    return Response("No results found",
+                                    mimetype="text/plain",
+                                    status=400)
+            except mariadb.DataError:
+                cnnct_to_db.endConn()
+                print("Something wrong with your data")
+                return Response("Something wrong with your data",
+                                mimetype="text/plain",
                                 status=400)
+            except mariadb.IntegrityError:
+                cnnct_to_db.endConn()
+                print("Something wrong with your data")
+                return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)
             user_list = []
             content = {}
             
@@ -191,6 +218,7 @@ def delete_tweet_like():
     client_loginToken = data.get('loginToken')
     client_tweetId = data.get('tweetId')
     validate_token(client_loginToken)
+    
     #Checks for required data in DB
     if(type(client_tweetId) != int or client_tweetId == None):
         return Response("Error! Missing required data",

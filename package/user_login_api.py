@@ -43,6 +43,20 @@ def validate_token(token_input):
     except InvalidToken as error:
         raise error
 
+def check_type(mydict, data):
+    for x in data.keys():
+        found_key = mydict.get(x)
+        chk = isinstance(data.get(x), found_key)
+        if not chk:
+            raise ValueError("Please check your inputs. Type error was found.")
+
+def check_char_len(mydict, data):
+    for item in data.keys():
+        found_key = mydict.get(item)
+        if(type(data.get(item)) == str and found_key != None):
+            if(len(data.get(item)) > found_key):
+                raise ValueError("Please check your inputs. Data is out of bounds")
+
 def login_user():
     data = request.json
     check_data_lst = ["email", "password"]
@@ -50,6 +64,18 @@ def login_user():
         return Response("Incorrect data keys received",
                                     mimetype="text/plain",
                                     status=400)
+    dict={
+            'email' : str,
+            'password' : str,
+            'content' : str,
+            }
+    char_limit_dict = {
+        'email': 20,
+        'password':20
+    }
+    check_type(dict,data)
+    check_char_len(char_limit_dict,data)
+    
     client_email = data.get('email')
     client_password = data.get('password')
 

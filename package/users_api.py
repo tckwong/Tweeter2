@@ -52,6 +52,20 @@ def validate_token(token_input):
     except InvalidToken as error:
         raise error
 
+def check_type(mydict, data):
+    for x in data.keys():
+        found_key = mydict.get(x)
+        if x != 'birthdate':
+            chk = isinstance(data.get(x), found_key)
+        if not chk:
+            raise ValueError("Please check your inputs. Type error was found.")
+
+def check_char_len(mydict, data):
+    for item in data.keys():
+        found_key = mydict.get(item)
+        if(type(data.get(item)) == str and found_key != None):
+            if(len(data.get(item)) > found_key):
+                raise ValueError("Please check your inputs. Data is out of bounds")
 def get_users():
     try:
         cnnct_to_db = MariaDbConnection()
@@ -100,7 +114,7 @@ def get_users():
                                         mimetype="text/plain",
                                         status=400)
     
-        if (type(params_id) == int and params_id > 0):
+        if ((0< params_id<99999999)):
             cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id =?", [params_id])
             userIdMatch = cnnct_to_db.cursor.fetchall()
             user_list = []
@@ -134,6 +148,24 @@ def create_new_user():
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
+        dict={
+            'email' : str,
+            'username' : str,
+            'password' : str,
+            'bio' : str,
+            'imageUrl' : str,
+            'bannerUrl': str,
+            }
+        char_limit_dict = {
+            'username': 20,
+            'password':20,
+            'email':20,
+            'imageUrl' : 100,
+            'bannerUrl' : 100
+        }
+        check_type(dict,data)
+        check_char_len(char_limit_dict,data)
+        
     except ValueError:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
@@ -199,6 +231,25 @@ def create_new_user():
 
 def update_user_info():
     data = request.json
+    dict={  
+            'loginToken':str,
+            'email' : str,
+            'username' : str,
+            'password' : str,
+            'bio' : str,
+            'imageUrl' : str,
+            'bannerUrl': str,
+            }
+    char_limit_dict = {
+        'username': 20,
+        'password':20,
+        'email':20,
+        'imageUrl' : 100,
+        'bannerUrl' : 100
+    }
+
+    check_type(dict,data)
+    check_char_len(char_limit_dict,data)
     client_loginToken = data.get('loginToken')
     validate_token(client_loginToken)
 
@@ -288,6 +339,12 @@ def delete_user():
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
+        
+        char_limit_dict = {
+            'password': 20,
+        }
+        check_char_len(char_limit_dict,data)
+        
         client_loginToken = data.get('loginToken')
         validate_token(client_loginToken)
         client_password = data.get('password')

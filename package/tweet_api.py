@@ -34,14 +34,6 @@ class InvalidToken(Exception):
     def __init__(self):
         super().__init__("Invalid loginToken received")
 
-def validate_client_data(list, data):
-    for key in data.keys():
-        if key in list:
-            continue
-        else:
-            return False
-    return True
-
 def validate_date(date_input):
     try:
         datetime.datetime.strptime(date_input, '%Y-%m-%d %H:%M:%S')
@@ -56,6 +48,28 @@ def validate_token(token_input):
             raise InvalidToken()
     except InvalidToken as error:
         raise error
+
+def validate_client_data(list, data):
+    for key in data.keys():
+        if key in list:
+            continue
+        else:
+            return False
+    return True
+
+def check_type(mydict, data):
+    for x in data.keys():
+        found_key = mydict.get(x)
+        chk = isinstance(data.get(x), found_key)
+        if not chk:
+            raise ValueError("Please check your inputs. Type error was found.")
+
+def check_char_len(mydict, data):
+    for item in data.keys():
+        found_key = mydict.get(item)
+        if(type(data.get(item)) == str and found_key != None):
+            if(len(data.get(item)) > found_key):
+                raise ValueError("Please check your inputs. Data is out of bounds")
 
 def get_tweets():
     try:
@@ -101,14 +115,26 @@ def get_tweets():
             return Response(json.dumps("Incorrect datatype received"),
                                 mimetype="text/plain",
                                 status=200)
-        if ((type(params_id) == int) and (params_id>0)):
-            cnnct_to_db.cursor.execute("SELECT * FROM tweet WHERE id=?", [params_id])
-            tweet_id_match = cnnct_to_db.cursor.fetchall()
+        if ((0< params_id<99999999)):
+            try:
+                cnnct_to_db.cursor.execute("SELECT * FROM tweet WHERE id=?", [params_id])
+                tweet_id_match = cnnct_to_db.cursor.fetchall()
+            except mariadb.DataError:
+                cnnct_to_db.endConn()
+                print("Something wrong with your data")
+                return Response("Something wrong with your data",
+                                mimetype="text/plain",
+                                status=400)
+            except mariadb.IntegrityError:
+                cnnct_to_db.endConn()
+                print("Something wrong with your data")
+                return Response("Something wrong with your data",
+                        mimetype="text/plain",
+                        status=400)   
             tweet_list = []
             content = {}
             for result in tweet_id_match:
                 created_at = result[2]
-                print(created_at)
                 created_at_serialize = created_at.strftime("%Y-%m-%d %H:%M:%S")
                 content = { 'tweetId': result[0],
                             'userId' : result[4],
@@ -136,6 +162,18 @@ def post_tweet():
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
+        dict={
+            'username' : str,
+            'loginToken' : str,
+            'content' : str,
+            'imageUrl' : str,
+            }
+        char_limit_dict = {
+            'username': 20,
+        }
+        check_type(dict,data)
+        check_char_len(char_limit_dict,data)
+        
     except InvalidData:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
@@ -165,12 +203,10 @@ def post_tweet():
                                 mimetype="text/plain",
                                 status=400)
         
-        dict_keys = ("userId", "username", "userImageUrl")
-        result_dict = dict(zip(dict_keys,user_id_match))
         #retrieve user information from DB
-        db_id = result_dict["userId"]
-        db_username = result_dict["username"]
-        db_imageUrl = result_dict["userImageUrl"]
+        db_id = user_id_match[0]
+        db_username = user_id_match[1]
+        db_imageUrl = user_id_match[2]
         
         #get current date and time
         cur_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -183,20 +219,18 @@ def post_tweet():
             return Response("Failed to update",
                                 mimetype="text/plain",
                                 status=400)
-        cnnct_to_db.cursor.execute("SELECT * FROM tweet")
+        cnnct_to_db.cursor.execute("SELECT * from tweet INNER JOIN user ON user.id = tweet.userId ORDER BY tweet.id DESC LIMIT 1")
         new_tweet_result = cnnct_to_db.cursor.fetchone()
-        client_dict_keys = ("id", "content", "createdAt", "tweetImageUrl","userId")
-        
-        result_tweet_dict = dict(zip(client_dict_keys,new_tweet_result))
-        result_created_serialize = result_tweet_dict['createdAt'].strftime('%Y-%m-%d %H:%M:%S')
+
+        result_created_serialize = new_tweet_result[2].strftime('%Y-%m-%d %H:%M:%S')
         resp = {
-                "tweetId" : "stringggg",
+                "tweetId" : new_tweet_result[0],
                 "userId" : db_id,
                 "username" : db_username,
                 "userImageUrl" : db_imageUrl,
-                "content" : result_tweet_dict["content"],
+                "content" : new_tweet_result[1],
                 "createdAt" : result_created_serialize,
-                "imageUrl" : result_tweet_dict["tweetImageUrl"]
+                "imageUrl" : new_tweet_result[3]
         }
 
         return Response(json.dumps(resp),
@@ -232,6 +266,16 @@ def update_tweet():
         return Response("Invalid data sent",
                                     mimetype="text/plain",
                                     status=400)
+    dict={
+        'tweetId' : int,
+        'content' : str,
+        'loginToken' : str
+        }
+    char_limit_dict = {
+        'username': 20,
+    }
+    check_type(dict,data)
+    check_char_len(char_limit_dict,data)
 
     if type(data.get('tweetId')) != int or data.get('content') == None:
         return Response("Please check your data input",
@@ -290,6 +334,13 @@ def update_tweet():
 
 def delete_tweet():
     data = request.json
+    dict={
+        'tweetId' : int,
+        'loginToken' : str
+        }
+
+    check_type(dict,data)
+
     if type(data.get('tweetId')) != int or data.get('tweetId') is None:
         return Response("Please check your data input",
                     mimetype="text/plain",
