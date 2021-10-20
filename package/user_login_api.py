@@ -28,7 +28,7 @@ class InvalidToken(Exception):
     def __init__(self):
         super().__init__("Invalid loginToken sent")
 
-def validate_client_data(list, data):
+def validate_misc_data(list, data):
     for key in data.keys():
         if key in list:
             continue
@@ -36,45 +36,67 @@ def validate_client_data(list, data):
             return False
     return True
 
-def validate_token(token_input):
-    try:
-        if not (len(token_input) == 32):
-            raise InvalidToken()
-    except InvalidToken as error:
-        raise error
+def check_data_required(mydict, data):
+    #Check if required
+    checklist=[]
+    for item in mydict:
+        if(item.get('required') == True):
+            checklist.append(item.get('name'))
+    
+    #Check data against required list
+    for key in checklist:
+        if key not in data.keys():
+            raise ValueError("Required data was not found")
+        else:
+            continue
+    return True
 
-def check_type(mydict, data):
-    for x in data.keys():
-        found_key = mydict.get(x)
-        chk = isinstance(data.get(x), found_key)
-        if not chk:
-            raise ValueError("Please check your inputs. Type error was found.")
-
-def check_char_len(mydict, data):
+def validate_data(mydict, data):
     for item in data.keys():
-        found_key = mydict.get(item)
-        if(type(data.get(item)) == str and found_key != None):
-            if(len(data.get(item)) > found_key):
-                raise ValueError("Please check your inputs. Data is out of bounds")
+        newlst = []
+        for obj in mydict:
+            x = obj.get('name')
+            newlst.append(x)
+            
+        found_index = newlst.index(item)
+        
+        if item in mydict[found_index]['name']:
+            #Check for correct datatype
+            data_value = data.get(item)
+            chk = isinstance(data_value, mydict[found_index]["datatype"])
+            if not chk:
+                raise ValueError("Please check your inputs. Type error was found.")
+
+            #Check for max char length
+            maxLen = mydict[found_index]['maxLength']
+            if(type(data.get(item)) == str and maxLen != None):
+                if(len(data.get(item)) > maxLen):
+                    raise ValueError("Please check your inputs. Data is out of bounds")
+        else:
+            raise ValueError("Please check your inputs. An error was found with your data")
 
 def login_user():
     data = request.json
     check_data_lst = ["email", "password"]
-    if not validate_client_data(check_data_lst,data):
+    if not validate_misc_data(check_data_lst,data):
         return Response("Incorrect data keys received",
                                     mimetype="text/plain",
                                     status=400)
-    dict={
-            'email' : str,
-            'password' : str,
-            'content' : str,
-            }
-    char_limit_dict = {
-        'email': 20,
-        'password':20
-    }
-    check_type(dict,data)
-    check_char_len(char_limit_dict,data)
+    requirements = [
+            {   'name': 'email',
+                'datatype': str,
+                'maxLength': 20,
+                'required': True
+            },
+            {   'name': 'password',
+                'datatype': str,
+                'maxLength': 20,
+                'required': True
+            },
+        ]
+
+    validate_data(requirements,data)
+    check_data_required(requirements,data)
     
     client_email = data.get('email')
     client_password = data.get('password')
@@ -147,19 +169,28 @@ def logout_user():
     try:
         data = request.json
         checklist = ["password","loginToken"]
-        if not validate_client_data(checklist,data):
+        if not validate_misc_data(checklist,data):
             return Response("Incorrect data keys received",
                                     mimetype="text/plain",
                                     status=400)
-        char_limit_dict = {
-            'password': 20,
-        }
-
-        check_char_len(char_limit_dict,data)  
+        requirements = [
+            {   'name': 'loginToken',
+                'datatype': str,
+                'maxLength': 32,
+                'required': True
+            },
+            {   'name': 'password',
+                'datatype': str,
+                'maxLength': 20,
+                'required': True
+            },
+        ]
+        validate_data(requirements,data)
+        check_data_required(requirements,data)
 
         client_loginToken = data.get('loginToken')
         client_password = data.get('password')
-        validate_token(client_loginToken)
+
         for item in checklist:
             if item is None:
                 return Response("Error! Missing required data",

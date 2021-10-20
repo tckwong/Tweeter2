@@ -196,7 +196,7 @@ def create_new_user():
             {   
                 'name': 'bio',
                 'datatype': str,
-                'maxLength': 1000,
+                'maxLength': 10000,
                 'required': False
             },
             {   
@@ -276,7 +276,7 @@ def create_new_user():
 
 def update_user_info():
     data = request.json
-    checklist = ["loginToken", "email", "bio", "birthdate", "username", "bannerUrl" "imageUrl"]
+    checklist = ["loginToken", "email", "bio", "birthdate", "username", "bannerUrl", "imageUrl"]
     if not validate_misc_data(checklist,data):
         return Response("Incorrect data keys received",
                             mimetype="text/plain",
@@ -299,7 +299,7 @@ def update_user_info():
             },
             {   'name': 'bio',
                 'datatype': str,
-                'maxLength': 20,
+                'maxLength': 5000,
                 'required': False
             },
             {   
@@ -360,6 +360,13 @@ def update_user_info():
                     cnnct_to_db.cursor.execute("UPDATE user SET username =? WHERE user.id=?",[result,id_match[0]])
                 elif (key == "bio"):
                     cnnct_to_db.cursor.execute("UPDATE user SET bio =? WHERE user.id=?",[result,id_match[0]])
+                elif (key == "birthdate"):
+                    birthdate_serialized = result.strftime("%Y-%m-%d")
+                    cnnct_to_db.cursor.execute("UPDATE user SET birthdate =? WHERE user.id=?",[birthdate_serialized,id_match[0]])
+                elif (key == "imageUrl"):
+                    cnnct_to_db.cursor.execute("UPDATE user SET imageUrl =? WHERE user.id=?",[result,id_match[0]])
+                elif (key == "bannerUrl"):
+                    cnnct_to_db.cursor.execute("UPDATE user SET bannerUrl =? WHERE user.id=?",[result,id_match[0]])
                 else:
                     print("Error happened with inputs")
 

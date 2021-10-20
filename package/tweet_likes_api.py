@@ -39,26 +39,44 @@ def validate_client_data(list, data):
             return False
     return True
 
-def validate_token(token_input):
-    try:
-        if not (len(token_input) == 32):
-            raise InvalidToken()
-    except InvalidToken as error:
-        raise error
+def check_data_required(mydict, data):
+    #Check if required
+    checklist=[]
+    for item in mydict:
+        if(item.get('required') == True):
+            checklist.append(item.get('name'))
+    
+    #Check data against required list
+    for key in checklist:
+        if key not in data.keys():
+            raise ValueError("Required data was not found")
+        else:
+            continue
+    return True
 
-def check_type(mydict, data):
-    for x in data.keys():
-        found_key = mydict.get(x)
-        chk = isinstance(data.get(x), found_key)
-        if not chk:
-            raise ValueError("Please check your inputs. Type error was found.")
-
-def check_char_len(mydict, data):
+def validate_data(mydict, data):
     for item in data.keys():
-        found_key = mydict.get(item)
-        if(type(data.get(item)) == str and found_key != None):
-            if(len(data.get(item)) > found_key):
-                raise ValueError("Please check your inputs. Data is out of bounds")
+        newlst = []
+        for obj in mydict:
+            x = obj.get('name')
+            newlst.append(x)
+            
+        found_index = newlst.index(item)
+        
+        if item in mydict[found_index]['name']:
+            #Check for correct datatype
+            data_value = data.get(item)
+            chk = isinstance(data_value, mydict[found_index]["datatype"])
+            if not chk:
+                raise ValueError("Please check your inputs. Type error was found.")
+
+            #Check for max char length
+            maxLen = mydict[found_index]['maxLength']
+            if(type(data.get(item)) == str and maxLen != None):
+                if(len(data.get(item)) > maxLen):
+                    raise ValueError("Please check your inputs. Data is out of bounds")
+        else:
+            raise ValueError("Please check your inputs. An error was found with your data")
 
 def get_tweet_likes():
     params = request.args
@@ -155,15 +173,24 @@ def post_tweet_like():
         return Response("Invalid data sent",
                                     mimetype="text/plain",
                                     status=400)
-    dict={  
-        'loginToken' : str,
-        'tweetId' : int,
-        }
-    check_type(dict,data)
+    requirements = [
+            {   'name': 'loginToken',
+                'datatype': str,
+                'maxLength': 32,
+                'required': True
+            },
+            {   'name': 'tweetId',
+                'datatype': int,
+                'maxLength': 10,
+                'required': True
+            },
+        ]
+
+    validate_data(requirements,data)
+    check_data_required(requirements,data)
 
     client_loginToken = data.get('loginToken')
     client_tweetId = data.get('tweetId')
-    validate_token(client_loginToken)
 
     #Checks for required data in DB
     if(type(client_tweetId) == int and client_tweetId == None):
@@ -221,9 +248,24 @@ def delete_tweet_like():
                                     mimetype="text/plain",
                                     status=400)
     
+    requirements = [
+            {   'name': 'loginToken',
+                'datatype': str,
+                'maxLength': 32,
+                'required': True
+            },
+            {   'name': 'tweetId',
+                'datatype': int,
+                'maxLength': 10,
+                'required': True
+            },
+        ]
+
+    validate_data(requirements,data)
+    check_data_required(requirements,data)
+
     client_loginToken = data.get('loginToken')
     client_tweetId = data.get('tweetId')
-    validate_token(client_loginToken)
     
     #Checks for required data in DB
     if(type(client_tweetId) != int or client_tweetId == None):
@@ -234,14 +276,17 @@ def delete_tweet_like():
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
-        cnnct_to_db.cursor.execute("SELECT tweet_like.id, tweet_like.tweetId, loginToken FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id INNER JOIN user_session ON user_session.userId = user.id WHERE loginToken=?",[client_loginToken])
+        cnnct_to_db.cursor.execute("SELECT user_session.userId, tweet_like.tweetId, loginToken FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id INNER JOIN user_session ON user_session.userId = user.id WHERE loginToken=?",[client_loginToken])
         match = cnnct_to_db.cursor.fetchone()
         if match == None:
             return Response("No matching results were found",
                                 mimetype="text/plain",
                                 status=400)
 
-        cnnct_to_db.cursor.execute("DELETE FROM tweet_like WHERE tweet_like.id=?", [match[0]])
+        db_userId = match[0]
+        db_tweetId = match[1]
+
+        cnnct_to_db.cursor.execute("DELETE FROM tweet_like WHERE tweet_like.tweetId=? AND userId=?", [db_tweetId,db_userId])
         
         if(cnnct_to_db.cursor.rowcount == 1):
             cnnct_to_db.conn.commit()

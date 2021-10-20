@@ -285,7 +285,7 @@ def update_comments():
         match_tweetId = info_match[2]
         match_content = info_match[3]
         match_username = info_match[4]
-        print("Matching info", info_match)
+        
     except ConnectionError:
         print("Error while attempting to connect to the database")
         return Response("Error while attempting to connect to the database",
