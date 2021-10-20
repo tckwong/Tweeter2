@@ -5,7 +5,7 @@ import json
 import dbcreds
 import datetime
 
-class MariaDbConnection:    
+class MariaDbConnection:
     def __init__(self):
         self.conn = None
         self.cursor = None
@@ -13,9 +13,9 @@ class MariaDbConnection:
     def connect(self):
         self.conn = mariadb.connect(
         user=dbcreds.user, 
-        password=dbcreds.password, 
+        password=dbcreds.password,
         host=dbcreds.host,
-        port=dbcreds.port, 
+        port=dbcreds.port,
         database=dbcreds.database)
         self.cursor = self.conn.cursor()
 
@@ -32,7 +32,7 @@ class InvalidData(Exception):
 
 class InvalidToken(Exception):
     def __init__(self):
-        super().__init__("Invalid loginToken received")
+        super().__init__("Invalid loginToken received.")
 
 def validate_date(date_input):
     try:
@@ -42,34 +42,53 @@ def validate_date(date_input):
         return False
     return True
 
-def validate_token(token_input):
-    try:
-        if not (len(token_input) == 32):
-            raise InvalidToken()
-    except InvalidToken as error:
-        raise error
-
-def validate_client_data(list, data):
+def validate_misc_data(list, data):
+    #Checks for invalid params/data
     for key in data.keys():
         if key in list:
             continue
         else:
             return False
     return True
+    
+def check_data_required(mydict, data):
+    #Check if required
+    checklist=[]
+    for item in mydict:
+        if(item.get('required') == True):
+            checklist.append(item.get('name'))
+    
+    #Check data against required list
+    for key in checklist:
+        if key not in data.keys():
+            raise ValueError("Required data was not found")
+        else:
+            continue
+    return True
 
-def check_type(mydict, data):
-    for x in data.keys():
-        found_key = mydict.get(x)
-        chk = isinstance(data.get(x), found_key)
-        if not chk:
-            raise ValueError("Please check your inputs. Type error was found.")
-
-def check_char_len(mydict, data):
+def validate_data(mydict, data):
     for item in data.keys():
-        found_key = mydict.get(item)
-        if(type(data.get(item)) == str and found_key != None):
-            if(len(data.get(item)) > found_key):
-                raise ValueError("Please check your inputs. Data is out of bounds")
+        newlst = []
+        for obj in mydict:
+            x = obj.get('name')
+            newlst.append(x)
+            
+        found_index = newlst.index(item)
+        
+        if item in mydict[found_index]['name']:
+            #Check for correct datatype
+            data_value = data.get(item)
+            chk = isinstance(data_value, mydict[found_index]["datatype"])
+            if not chk:
+                raise ValueError("Please check your inputs. Type error was found.")
+
+            #Check for max char length
+            maxLen = mydict[found_index]['maxLength']
+            if(type(data.get(item)) == str and maxLen != None):
+                if(len(data.get(item)) > maxLen):
+                    raise ValueError("Please check your inputs. Data is out of bounds")
+        else:
+            raise ValueError("Please check your inputs. An error was found with your data")
 
 def get_tweets():
     try:
@@ -82,9 +101,9 @@ def get_tweets():
                                     mimetype="text/plain",
                                     status=400)
     params = request.args
-    params_id = request.args.get("id")
-    checklist = ["id"]
-    if not validate_client_data(checklist, params):
+    params_id = request.args.get("userId")
+    checklist = ["userId"]
+    if not validate_misc_data(checklist, params):
         return Response("Incorrect data keys received",
                             mimetype="text/plain",
                             status=400)
@@ -110,15 +129,16 @@ def get_tweets():
                                     status=200)
     elif (params_id is not None):
         try:
-            params_id = int(request.args.get("id"))
+            params_id = int(request.args.get("userId"))
         except ValueError:
             return Response(json.dumps("Incorrect datatype received"),
                                 mimetype="text/plain",
                                 status=200)
         if ((0< params_id<99999999)):
             try:
-                cnnct_to_db.cursor.execute("SELECT * FROM tweet WHERE id=?", [params_id])
+                cnnct_to_db.cursor.execute("SELECT * FROM tweet WHERE userId=?", [params_id])
                 tweet_id_match = cnnct_to_db.cursor.fetchall()
+                print(tweet_id_match)            
             except mariadb.DataError:
                 cnnct_to_db.endConn()
                 print("Something wrong with your data")
@@ -142,7 +162,7 @@ def get_tweets():
                             'createdAt' : created_at_serialize,
                             'tweetImageUrl' : result[3]
                             }
-            tweet_list.append(content)
+                tweet_list.append(content)
             cnnct_to_db.endConn()
         else:
             cnnct_to_db.endConn()
@@ -158,22 +178,33 @@ def post_tweet():
     try:
         data = request.json
         checklist = ["loginToken", "content", "imageUrl"]
-        if not validate_client_data(checklist,data):
+        if not validate_misc_data(checklist,data):
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
-        dict={
-            'username' : str,
-            'loginToken' : str,
-            'content' : str,
-            'imageUrl' : str,
-            }
-        char_limit_dict = {
-            'content': 200,
-            'imageUrl':100
-        }
-        check_type(dict,data)
-        check_char_len(char_limit_dict,data)
+        
+        requirements = [
+            {   'name': 'loginToken',
+                'datatype': str,
+                'maxLength': 32,
+                'required': True
+            },
+            {   
+                'name': 'content',
+                'datatype': str,
+                'maxLength': 200,
+                'required': True
+            },
+            {   
+                'name': 'imageUrl',
+                'datatype': str,
+                'maxLength': 150,
+                'required': False
+            },
+        ]
+
+        validate_data(requirements,data)
+        check_data_required(requirements,data)
         
     except InvalidData:
         return Response("Invalid data sent",
@@ -181,15 +212,8 @@ def post_tweet():
                                     status=400)
 
     client_loginToken = data.get('loginToken')
-    validate_token(client_loginToken)
-
-    if(data.get('content') == None):
-        return Response("Content cannot be none",
-                                mimetype="text/plain",
-                                status=400)
-    else:
-        client_content = data.get('content')
-        client_imageUrl = data.get('imageUrl')
+    client_content = data.get('content')
+    client_imageUrl = data.get('imageUrl')
 
     try:
         cnnct_to_db = MariaDbConnection()
@@ -259,7 +283,7 @@ def update_tweet():
     try:
         data = request.json
         checklist = ["loginToken", "tweetId", "content"]
-        if not validate_client_data(checklist,data):
+        if not validate_misc_data(checklist,data):
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
@@ -267,17 +291,28 @@ def update_tweet():
         return Response("Invalid data sent",
                                     mimetype="text/plain",
                                     status=400)
-    dict={
-        'tweetId' : int,
-        'content' : str,
-        'loginToken' : str
-        }
-    char_limit_dict = {
-            'content': 200,
-            'imageUrl':100
-        }
-    check_type(dict,data)
-    check_char_len(char_limit_dict,data)
+    requirements = [
+            {   'name': 'loginToken',
+                'datatype': str,
+                'maxLength': 32,
+                'required': True
+            },  
+            {   
+                'name': 'tweetId',
+                'datatype': int,
+                'maxLength': 10,
+                'required': True
+            },
+            {   
+                'name': 'content',
+                'datatype': str,
+                'maxLength': 200,
+                'required': True
+            },
+        ]
+
+    validate_data(requirements,data)
+    check_data_required(requirements,data)
 
     if type(data.get('tweetId')) != int or data.get('content') == None:
         return Response("Please check your data input",
@@ -288,7 +323,6 @@ def update_tweet():
         client_tweetId = data.get('tweetId')
         client_content = data.get('content')
     
-    validate_token(client_loginToken)
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
@@ -336,21 +370,30 @@ def update_tweet():
 
 def delete_tweet():
     data = request.json
-    dict={
-        'tweetId' : int,
-        'loginToken' : str
-        }
+    checklist = ["loginToken", "tweetId"]
+    if not validate_misc_data(checklist,data):
+        return Response("Incorrect data keys received",
+                            mimetype="text/plain",
+                            status=400)
+    requirements = [
+            {   'name': 'loginToken',
+                'datatype': str,
+                'maxLength': 32,
+                'required': True
+            },  
+            {   
+                'name': 'tweetId',
+                'datatype': int,
+                'maxLength': 10,
+                'required': True
+            },
+        ]
 
-    check_type(dict,data)
-
-    if type(data.get('tweetId')) != int or data.get('tweetId') is None:
-        return Response("Please check your data input",
-                    mimetype="text/plain",
-                    status=400)
+    validate_data(requirements,data)
+    check_data_required(requirements,data)
 
     client_loginToken = data.get('loginToken')
     client_tweetId = data.get('tweetId')
-    validate_token(client_loginToken)
     
     try:
         cnnct_to_db = MariaDbConnection()

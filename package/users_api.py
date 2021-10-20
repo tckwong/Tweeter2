@@ -30,14 +30,6 @@ class InvalidToken(Exception):
     def __init__(self):
         super().__init__("Invalid loginToken received")
 
-def validate_client_data(list, data):
-    for key in data.keys():
-        if key in list:
-            continue
-        else:
-            return False
-    return True
-
 def validate_date(date_input):
     try:
         datetime.datetime.strptime(date_input, '%Y-%m-%d')
@@ -45,27 +37,54 @@ def validate_date(date_input):
         return False
     return True
 
-def validate_token(token_input):
-    try:
-        if not (len(token_input) == 32):
-            raise InvalidToken()
-    except InvalidToken as error:
-        raise error
+def validate_misc_data(list, data):
+    #Checks for invalid params/data
+    for key in data.keys():
+        if key in list:
+            continue
+        else:
+            return False
+    return True
+    
+def check_data_required(mydict, data):
+    #Check if required
+    checklist=[]
+    for item in mydict:
+        if(item.get('required') == True):
+            checklist.append(item.get('name'))
+    
+    #Check data against required list
+    for key in checklist:
+        if key not in data.keys():
+            raise ValueError("Required data was not found")
+        else:
+            continue
+    return True
 
-def check_type(mydict, data):
-    for x in data.keys():
-        found_key = mydict.get(x)
-        if x != 'birthdate':
-            chk = isinstance(data.get(x), found_key)
-        if not chk:
-            raise ValueError("Please check your inputs. Type error was found.")
-
-def check_char_len(mydict, data):
+def validate_data(mydict, data):
     for item in data.keys():
-        found_key = mydict.get(item)
-        if(type(data.get(item)) == str and found_key != None):
-            if(len(data.get(item)) > found_key):
-                raise ValueError("Please check your inputs. Data is out of bounds")
+        newlst = []
+        for obj in mydict:
+            x = obj.get('name')
+            newlst.append(x)
+            
+        found_index = newlst.index(item)
+        
+        if item in mydict[found_index]['name']:
+            #Check for correct datatype
+            data_value = data.get(item)
+            chk = isinstance(data_value, mydict[found_index]["datatype"])
+            if not chk:
+                raise ValueError("Please check your inputs. Type error was found.")
+
+            #Check for max char length
+            maxLen = mydict[found_index]['maxLength']
+            if(type(data.get(item)) == str and maxLen != None):
+                if(len(data.get(item)) > maxLen):
+                    raise ValueError("Please check your inputs. Data is out of bounds")
+        else:
+            raise ValueError("Please check your inputs. An error was found with your data")
+
 def get_users():
     try:
         cnnct_to_db = MariaDbConnection()
@@ -80,7 +99,7 @@ def get_users():
     params = request.args
     params_id = request.args.get("id")
     checklist = ["id"]
-    if not validate_client_data(checklist,params):
+    if not validate_misc_data(checklist,params):
         return Response("Incorrect data keys received",
                             mimetype="text/plain",
                             status=400)
@@ -121,7 +140,8 @@ def get_users():
             content = {}
             for result in userIdMatch:
                 birthdate_serialized = result[5].strftime("%Y-%m-%d")
-                content = { 'username': result[1],
+                content = { 'id': result[0],
+                            'username': result[1],
                             'email' : result[3],
                             'bio' : result[4],
                             'birthdate' : birthdate_serialized,
@@ -142,29 +162,59 @@ def get_users():
 
 def create_new_user():
     try:
+        #retrieve user data input
         data = request.json
+        #Check for incorrect data inputs
         checklist = ["email", "username","password","bio","birthdate","imageUrl","bannerUrl"]
-        if not validate_client_data(checklist,data):
+        if not validate_misc_data(checklist,data):
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
-        dict={
-            'email' : str,
-            'username' : str,
-            'password' : str,
-            'bio' : str,
-            'imageUrl' : str,
-            'bannerUrl': str,
-            }
-        char_limit_dict = {
-            'username': 20,
-            'password':20,
-            'email':20,
-            'imageUrl' : 100,
-            'bannerUrl' : 100
-        }
-        check_type(dict,data)
-        check_char_len(char_limit_dict,data)
+        
+        requirements = [
+            {   'name': 'username',
+                'datatype': str,
+                'maxLength': 30,
+                'required': True
+            },
+            {   'name': 'email',
+                'datatype': str,
+                'maxLength': 20,
+                'required': True
+            },
+            {   'name': 'password',
+                'datatype': str,
+                'maxLength': 20,
+                'required': True
+            },
+            {   
+                'name': 'birthdate',
+                'datatype': str,
+                'maxLength': 20,
+                'required': True
+            },
+            {   
+                'name': 'bio',
+                'datatype': str,
+                'maxLength': 1000,
+                'required': False
+            },
+            {   
+                'name': 'imageUrl',
+                'datatype': str,
+                'maxLength': 150,
+                'required': False
+            },
+            {   
+                'name': 'bannerUrl',
+                'datatype': str,
+                'maxLength': 150,
+                'required': False
+            },
+        ]
+
+        validate_data(requirements,data)
+        check_data_required(requirements,data)
         
     except ValueError:
         return Response("Invalid data sent",
@@ -178,11 +228,6 @@ def create_new_user():
     client_imageUrl = data.get('imageUrl')
     client_bannerUrl = data.get('bannerUrl')
 
-    #Checks for required data in DB
-    if (client_email is None or client_username is None or client_password is None or client_birthdate is None):
-        return Response("Error! Missing required data",
-                        mimetype="text/plain",
-                        status=400)
     #Checks birthdate format
     if not validate_date(client_birthdate):
         return Response("Invalid date format. Please check data inputs",
@@ -231,28 +276,55 @@ def create_new_user():
 
 def update_user_info():
     data = request.json
-    dict={  
-            'loginToken':str,
-            'email' : str,
-            'username' : str,
-            'password' : str,
-            'bio' : str,
-            'imageUrl' : str,
-            'bannerUrl': str,
-            }
-    char_limit_dict = {
-        'username': 20,
-        'password':20,
-        'email':20,
-        'imageUrl' : 100,
-        'bannerUrl' : 100
-    }
-
-    check_type(dict,data)
-    check_char_len(char_limit_dict,data)
+    checklist = ["loginToken", "email", "bio", "birthdate", "username", "bannerUrl" "imageUrl"]
+    if not validate_misc_data(checklist,data):
+        return Response("Incorrect data keys received",
+                            mimetype="text/plain",
+                            status=400)
+    requirements = [
+            {   'name': 'loginToken',
+                'datatype': str,
+                'maxLength': 32,
+                'required': True
+            },
+            {   'name': 'username',
+                'datatype': str,
+                'maxLength': 30,
+                'required': False
+            },
+            {   'name': 'email',
+                'datatype': str,
+                'maxLength': 20,
+                'required': False
+            },
+            {   'name': 'bio',
+                'datatype': str,
+                'maxLength': 20,
+                'required': False
+            },
+            {   
+                'name': 'birthdate',
+                'datatype': str,
+                'maxLength': 20,
+                'required': False
+            },
+            {   
+                'name': 'imageUrl',
+                'datatype': str,
+                'maxLength': 150,
+                'required': False
+            },
+            {   
+                'name': 'bannerUrl',
+                'datatype': str,
+                'maxLength': 150,
+                'required': False
+            },
+        ]
+    validate_data(requirements,data)
+    check_data_required(requirements,data)
     client_loginToken = data.get('loginToken')
-    validate_token(client_loginToken)
-
+    
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
@@ -335,18 +407,29 @@ def delete_user():
     try:                                
         data = request.json
         checklist = ["password","loginToken"]
-        if not validate_client_data(checklist,data):
+        if not validate_misc_data(checklist,data):
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
         
-        char_limit_dict = {
-            'password': 20,
-        }
-        check_char_len(char_limit_dict,data)
-        
+        requirements = [
+            {   'name': 'loginToken',
+                'datatype': str,
+                'maxLength': 32,
+                'required': True
+            },
+            {   
+                'name': 'password',
+                'datatype': str,
+                'maxLength': 20,
+                'required': True
+            },
+        ]
+
+        validate_data(requirements,data)
+        check_data_required(requirements,data)
+
         client_loginToken = data.get('loginToken')
-        validate_token(client_loginToken)
         client_password = data.get('password')
     except ValueError:
         return Response("Invalid data sent",
