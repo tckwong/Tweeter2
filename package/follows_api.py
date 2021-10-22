@@ -118,8 +118,9 @@ def get_follows():
                                         status=400)
         if ((0< params_id<99999999)):
             try:
-                cnnct_to_db.cursor.execute("SELECT followed,email,username,bio,birthdate,imageUrl,bannerUrl FROM follow INNER JOIN user ON follow.follower = user.id WHERE user.id = ?", [params_id])
-                follower_id_match = cnnct_to_db.cursor.fetchall()
+                cnnct_to_db.cursor.execute("SELECT followed,email,username,bio,birthdate,imageUrl,bannerUrl FROM follow INNER JOIN user ON follow.followed = user.id WHERE follower=?", [params_id])
+                follower_match = cnnct_to_db.cursor.fetchall()
+                print(follower_match)
             except mariadb.DataError:
                 cnnct_to_db.endConn()
                 print("Something wrong with your data")
@@ -134,7 +135,7 @@ def get_follows():
                         status=400)   
             follow_list = []
             content = {}
-            for result in follower_id_match:
+            for result in follower_match:
                 birthdate_serialized = result[4].strftime("%Y-%m-%d")
                 content = { 'userId': result[0],
                             'email' : result[1],
@@ -144,7 +145,7 @@ def get_follows():
                             'imageUrl' : result[5],
                             'bannerUrl' : result[6]
                             }
-            follow_list.append(content)
+                follow_list.append(content)
             cnnct_to_db.endConn()
         else:
             cnnct_to_db.endConn()
