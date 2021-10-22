@@ -168,7 +168,7 @@ def login_user():
 def logout_user():
     try:
         data = request.json
-        checklist = ["password","loginToken"]
+        checklist = ["username","loginToken"]
         if not validate_misc_data(checklist,data):
             return Response("Incorrect data keys received",
                                     mimetype="text/plain",
@@ -179,9 +179,9 @@ def logout_user():
                 'maxLength': 32,
                 'required': True
             },
-            {   'name': 'password',
+            {   'name': 'username',
                 'datatype': str,
-                'maxLength': 20,
+                'maxLength': 30,
                 'required': True
             },
         ]
@@ -189,7 +189,7 @@ def logout_user():
         check_data_required(requirements,data)
 
         client_loginToken = data.get('loginToken')
-        client_password = data.get('password')
+        client_username = data.get('username')
 
         for item in checklist:
             if item is None:
@@ -209,7 +209,7 @@ def logout_user():
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
 
-        cnnct_to_db.cursor.execute("SELECT user.id, password, loginToken FROM user INNER JOIN user_session ON user_session.userId = user.id WHERE password=? and loginToken=?",[client_password,client_loginToken])
+        cnnct_to_db.cursor.execute("SELECT user.id, password, loginToken, username FROM user INNER JOIN user_session ON user_session.userId = user.id WHERE username=? and loginToken=?",[client_username,client_loginToken])
     except ConnectionError:
         print("Error while attempting to connect to the database")
         return Response("Error while attempting to connect to the database",
