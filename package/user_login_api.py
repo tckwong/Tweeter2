@@ -2,6 +2,7 @@ from package import app
 from flask import request, Response
 import mariadb
 import dbcreds
+import json
 
 class MariaDbConnection:    
     def __init__(self):
@@ -113,7 +114,23 @@ def login_user():
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
 
-        cnnct_to_db.cursor.execute("SELECT id, email, password FROM user WHERE email=? and password=?",[client_email,client_password])
+        cnnct_to_db.cursor.execute("SELECT id, email, username, bio, birthdate, imageUrl, bannerUrl FROM user WHERE email=? and password=?",[client_email,client_password])
+        match = cnnct_to_db.cursor.fetchone()
+        #Only returns one row, so only one combination is valid
+        if match == None:
+            return Response("No matching login combination",
+                            mimetype="plain/text",
+                            status=400)
+        else:
+            client_id = match[0]
+            client_email = match[1]
+            client_username = match[2]
+            client_bio = match[3]
+            birthdate_serialized = match[4].strftime("%Y-%m-%d")
+            client_birthdate=birthdate_serialized
+            client_imageUrl = match[5]
+            client_bannerUrl = match[6]
+        
     except ConnectionError:
         print("Error while attempting to connect to the database")
         return Response("Error while attempting to connect to the database",
@@ -130,24 +147,17 @@ def login_user():
                         mimetype="text/plain",
                         status=400)
     
-    id_match = cnnct_to_db.cursor.fetchone()
-    #Only returns one row, so only one combination is valid
-    if id_match == None:
-        return Response("No matching login combination",
-                        mimetype="plain/text",
-                        status=400)
-    else:
-        id_match = id_match[0]
-    
     #create unique login token
     import uuid
     generateUuid = uuid.uuid4().hex
     str(generateUuid)
 
     try:
-        cnnct_to_db.cursor.execute("INSERT INTO user_session (userId, loginToken) VALUES(?, ?)",[id_match, generateUuid])
+        cnnct_to_db.cursor.execute("INSERT INTO user_session (userId, loginToken) VALUES(?,?)",[client_id, generateUuid])
         cnnct_to_db.conn.commit()
-    
+        cnnct_to_db.cursor.execute("SELECT loginToken FROM user_session  WHERE userId =? ORDER BY id DESC LIMIT 1",[client_id])
+        get_token = cnnct_to_db.cursor.fetchone()
+        client_token = get_token[0]
     except mariadb.DataError:
         print("Something wrong with your data")
         return Response("Something wrong with your data",
@@ -161,9 +171,19 @@ def login_user():
     finally:
         cnnct_to_db.endConn()
 
-    return Response("Log in posted",
-                    mimetype="text/plain",
-                    status=201)
+    resp = {
+        "userId": client_id,
+        "email": client_email,
+        "username": client_username,
+        "bio": client_bio,
+        "birthdate": client_birthdate,
+        "loginToken": client_token,
+        "imageUrl": client_imageUrl,
+        "bannerUrl": client_bannerUrl
+    }
+    return Response(json.dumps(resp),
+                                mimetype="application/json",
+                                status=201)
 
 def logout_user():
     try:
