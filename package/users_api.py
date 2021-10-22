@@ -97,8 +97,8 @@ def get_users():
                                     status=400)
 
     params = request.args
-    params_id = request.args.get("id")
-    checklist = ["id"]
+    params_id = request.args.get("userId")
+    checklist = ["userId"]
     if not validate_misc_data(checklist,params):
         return Response("Incorrect data keys received",
                             mimetype="text/plain",
@@ -127,7 +127,7 @@ def get_users():
                                     status=200)
     elif (params_id is not None):
         try:
-            params_id = int(request.args.get("id"))
+            params_id = int(request.args.get("userId"))
         except ValueError:
             return Response("Incorrect datatype received",
                                         mimetype="text/plain",

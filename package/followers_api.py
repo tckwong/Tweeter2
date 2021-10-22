@@ -118,7 +118,7 @@ def get_followers():
                                         status=400)
         if ((0< params_id<99999999)):
             try:
-                cnnct_to_db.cursor.execute("SELECT id,email,username,bio,birthdate,imageUrl,bannerUrl FROM user INNER JOIN follow ON  user.id = follower WHERE followed =?", [params_id])
+                cnnct_to_db.cursor.execute("SELECT id,email,username,bio,birthdate,imageUrl,bannerUrl FROM user INNER JOIN follow ON user.id = follower WHERE followed =?", [params_id])
                 follower_id_match = cnnct_to_db.cursor.fetchall()
                 
             except mariadb.DataError:
