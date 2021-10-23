@@ -112,7 +112,7 @@ def get_comments():
                             mimetype="text/plain",
                             status=400)
     if (params_id is None):
-        cnnct_to_db.cursor.execute("SELECT comment.id, tweet.id, comment.userId, username, comment.content, comment.createdAt, imageUrl, tweetImageUrl FROM comment INNER JOIN tweet ON comment.tweetId = tweet.id INNER JOIN user ON user.id=tweet.userId")
+        cnnct_to_db.cursor.execute("SELECT comment.id,tweet.id, user.id, username, comment.content, comment.createdAt, imageUrl, tweetImageUrl FROM comment INNER JOIN user ON user.id = comment.userId INNER JOIN tweet on comment.tweetId = tweet.id")
         list = cnnct_to_db.cursor.fetchall()
         comment_list = []
         content = {}
@@ -140,7 +140,7 @@ def get_comments():
                                 mimetype="text/plain",
                                 status=200)
         if ((0< params_id<99999999)):
-            cnnct_to_db.cursor.execute("SELECT comment.id, tweet.id, comment.userId, username, comment.content, comment.createdAt, imageUrl, tweetImageUrl FROM comment INNER JOIN tweet ON comment.tweetId = tweet.id INNER JOIN user ON user.id=tweet.userId WHERE tweetId=?", [params_id])
+            cnnct_to_db.cursor.execute("SELECT comment.id,tweet.id, user.id, username, comment.content, comment.createdAt, imageUrl, tweetImageUrl FROM comment INNER JOIN user ON user.id = comment.userId INNER JOIN tweet on comment.tweetId = tweet.id WHERE tweetId=?", [params_id])
             tweet_id_match = cnnct_to_db.cursor.fetchall()
             comment_list = []
             content = {}
