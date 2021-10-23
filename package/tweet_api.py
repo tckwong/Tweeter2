@@ -30,10 +30,6 @@ class InvalidData(Exception):
     def __init__(self):
         super().__init__("Invalid data passed")
 
-class InvalidToken(Exception):
-    def __init__(self):
-        super().__init__("Invalid loginToken received.")
-
 def validate_date(date_input):
     try:
         datetime.datetime.strptime(date_input, '%Y-%m-%d %H:%M:%S')

@@ -30,10 +30,6 @@ class InvalidData(Exception):
     def __init__(self):
         super().__init__("Invalid data passed")
 
-class InvalidToken(Exception):
-    def __init__(self):
-        super().__init__("Invalid loginToken received")
-
 def validate_client_data(list, data):
     for key in data.keys():
         if key in list:
@@ -50,26 +46,53 @@ def validate_date(date_input):
         return False
     return True
 
-def validate_token(token_input):
-    try:
-        if not (len(token_input) == 32):
-            raise InvalidToken()
-    except InvalidToken as error:
-        raise error
+def validate_misc_data(list, data):
+    #Checks for invalid params/data
+    for key in data.keys():
+        if key in list:
+            continue
+        else:
+            return False
+    return True
+    
+def check_data_required(mydict, data):
+    #Check if required
+    checklist=[]
+    for item in mydict:
+        if(item.get('required') == True):
+            checklist.append(item.get('name'))
+    
+    #Check data against required list
+    for key in checklist:
+        if key not in data.keys():
+            raise ValueError("Required data was not found")
+        else:
+            continue
+    return True
 
-def check_type(mydict, data):
-    for x in data.keys():
-        found_key = mydict.get(x)
-        chk = isinstance(data.get(x), found_key)
-        if not chk:
-            raise ValueError("Please check your inputs. Type error was found.")
-
-def check_char_len(mydict, data):
+def validate_data(mydict, data):
     for item in data.keys():
-        found_key = mydict.get(item)
-        if(type(data.get(item)) == str and found_key != None):
-            if(len(data.get(item)) > found_key):
-                raise ValueError("Please check your inputs. Data is out of bounds")
+        newlst = []
+        for obj in mydict:
+            x = obj.get('name')
+            newlst.append(x)
+            
+        found_index = newlst.index(item)
+        
+        if item in mydict[found_index]['name']:
+            #Check for correct datatype
+            data_value = data.get(item)
+            chk = isinstance(data_value, mydict[found_index]["datatype"])
+            if not chk:
+                raise ValueError("Please check your inputs. Type error was found.")
+
+            #Check for max char length
+            maxLen = mydict[found_index]['maxLength']
+            if(type(data.get(item)) == str and maxLen != None):
+                if(len(data.get(item)) > maxLen):
+                    raise ValueError("Please check your inputs. Data is out of bounds")
+        else:
+            raise ValueError("Please check your inputs. An error was found with your data")
 
 def get_comments():
     try:
@@ -89,17 +112,18 @@ def get_comments():
                             mimetype="text/plain",
                             status=400)
     if (params_id is None):
-        cnnct_to_db.cursor.execute("SELECT * FROM comment")
+        cnnct_to_db.cursor.execute("SELECT comment.id, tweet.id, user.id, username, comment.content, comment.createdAt, imageUrl, tweetImageUrl FROM comment INNER JOIN tweet ON comment.tweetId = tweet.id INNER JOIN user ON user.id=tweet.userId")
         list = cnnct_to_db.cursor.fetchall()
         comment_list = []
         content = {}
         for result in list:
-            created_at = result[4]
+            created_at = result[5]
             created_at_serialize = created_at.strftime("%Y-%m-%d %H:%M:%S")
             content = { 'commentId': result[0],
-                        'userId' : result[1],
-                        'tweetId' : result[2],
-                        'content' : result[3],
+                        'userId' : result[2],
+                        'tweetId' : result[1],
+                        'username': result[3],
+                        'content' : result[4],
                         'createdAt': created_at_serialize
                         }
             comment_list.append(content)
@@ -116,7 +140,7 @@ def get_comments():
                                 mimetype="text/plain",
                                 status=200)
         if ((0< params_id<99999999)):
-            cnnct_to_db.cursor.execute("SELECT * FROM comment WHERE tweetId=?", [params_id])
+            cnnct_to_db.cursor.execute("SELECT comment.id, tweet.id, user.id, username, comment.content, comment.createdAt, imageUrl, tweetImageUrl FROM comment INNER JOIN tweet ON comment.tweetId = tweet.id INNER JOIN user ON user.id=tweet.userId WHERE tweetId=?", [params_id])
             tweet_id_match = cnnct_to_db.cursor.fetchall()
             comment_list = []
             content = {}
@@ -124,9 +148,10 @@ def get_comments():
                 created_at = result[4]
                 created_at_serialize = created_at.strftime("%Y-%m-%d %H:%M:%S")
                 content = { 'commentId': result[0],
-                        'userId' : result[1],
-                        'tweetId' : result[2],
-                        'content' : result[3],
+                        'userId' : result[2],
+                        'tweetId' : result[1],
+                        'username': result[3],
+                        'content' : result[4],
                         'createdAt': created_at_serialize
                         }
             comment_list.append(content)
@@ -149,24 +174,34 @@ def post_comments():
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
-        dict={
-            'tweetId' : int,
-            'loginToken' : str,
-            'content' : str,
-            }
-        check_type(dict,data)
-        char_limit_dict = {
-            'content': 150,
-            'imageUrl':100
-        }
-        check_char_len(char_limit_dict,data)
+        requirements = [
+            {   'name': 'loginToken',
+                'datatype': str,
+                'maxLength': 32,
+                'required': True
+            },
+            {   
+                'name': 'tweetId',
+                'datatype': int,
+                'maxLength': 10,
+                'required': True
+            },
+            {   
+                'name': 'content',
+                'datatype': str,
+                'maxLength': 150,
+                'required': True
+            },
+        ]
+        validate_data(requirements,data)
+        check_data_required(requirements,data)
+        
     except InvalidData:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
                                     status=400)
 
     client_loginToken = data.get('loginToken')
-    validate_token(client_loginToken)
 
     if(data.get('content') == None or data.get('tweetId') == None):
         return Response("Required data missing",
@@ -242,18 +277,28 @@ def update_comments():
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
-        dict={
-            'loginToken' : str,
-            'content' : str,
-            'commentId' : int
-            }
-        char_limit_dict = {
-            'content': 150
-        }
-        check_type(dict,data)
-        check_char_len(char_limit_dict,data)
+        requirements = [
+                {   'name': 'loginToken',
+                    'datatype': str,
+                    'maxLength': 32,
+                    'required': True
+                },
+                {   
+                    'name': 'commentId',
+                    'datatype': int,
+                    'maxLength': 10,
+                    'required': True
+                },
+                {   
+                    'name': 'content',
+                    'datatype': str,
+                    'maxLength': 150,
+                    'required': True
+                },
+            ]
+        validate_data(requirements,data)
+        check_data_required(requirements,data)
 
-        
     except ValueError:
         return Response("Invalid data sent",
                                     mimetype="text/plain",
@@ -267,7 +312,6 @@ def update_comments():
         client_loginToken = data.get('loginToken')
         client_commentId = data.get('commentId')
         client_content = data.get('content')
-    validate_token(client_loginToken)
     
     try:
         cnnct_to_db = MariaDbConnection()
@@ -331,12 +375,22 @@ def delete_comments():
             return Response("Incorrect data keys received",
                                 mimetype="text/plain",
                                 status=400)
-    dict={
-        'commentId' : int,
-        'loginToken' : str
-        }
 
-    check_type(dict,data)
+    requirements = [
+                {   'name': 'loginToken',
+                    'datatype': str,
+                    'maxLength': 32,
+                    'required': True
+                },
+                {   
+                    'name': 'commentId',
+                    'datatype': int,
+                    'maxLength': 10,
+                    'required': True
+                }
+            ]
+    validate_data(requirements,data)
+    check_data_required(requirements,data)
     
     if type(data.get('commentId')) != int or data.get('commentId') is None:
         return Response("Please check your data input",
@@ -345,8 +399,7 @@ def delete_comments():
 
     client_loginToken = data.get('loginToken')
     client_commentId = data.get('commentId')
-    validate_token(client_loginToken)
-    
+
     try:
         cnnct_to_db = MariaDbConnection()
         cnnct_to_db.connect()
