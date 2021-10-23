@@ -393,7 +393,7 @@ def update_user_info():
                         status=200)
     except ConnectionError:
         cnnct_to_db.endConn()
-        return Response(json.dumps("Error while attempting to connect to the database"),
+        return Response("Error while attempting to connect to the database",
                                     mimetype="text/plain",
                                     status=400)
     except mariadb.DataError:

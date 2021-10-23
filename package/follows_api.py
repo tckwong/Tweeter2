@@ -203,7 +203,7 @@ def post_follow():
                                 status=400)
 
         follower_user_id = info_match[0]
-        
+        follower_token = info_match[1]
         cnnct_to_db.cursor.execute("SELECT id FROM user WHERE id=?",[client_followId])
         user_id_match = cnnct_to_db.cursor.fetchall()
         if(user_id_match == None):
@@ -218,10 +218,13 @@ def post_follow():
             return Response("Failed to update",
                                 mimetype="text/plain",
                                 status=400)
-
-        return Response("Follow sucessful",
-                                mimetype="text/plain",
-                                status=201)
+        resp={
+            "loginToken": follower_token,
+            "followId": client_followId
+        }
+        return Response(json.dumps(resp),
+                        mimetype="application/json",
+                        status=201)
     except ConnectionError:
         print("Error while attempting to connect to the database")
         return Response("Error while attempting to connect to the database",
@@ -286,6 +289,7 @@ def delete_follow():
                                 status=400)
 
         follower_user_id = info_match[0]
+        follower_token = info_match[1]
         
         cnnct_to_db.cursor.execute("SELECT id FROM user WHERE id=?",[client_followId])
         user_id_match = cnnct_to_db.cursor.fetchall()
@@ -301,10 +305,13 @@ def delete_follow():
             return Response("Failed to update",
                                 mimetype="text/plain",
                                 status=400)
-
-        return Response("Follow delete sucessful",
-                                mimetype="text/plain",
-                                status=201)
+        resp={
+            "loginToken": follower_token,
+            "followId": client_followId
+        }
+        return Response(json.dumps(resp),
+                        mimetype="application/json",
+                        status=201)
     except ConnectionError:
         print("Error while attempting to connect to the database")
         return Response("Error while attempting to connect to the database",
