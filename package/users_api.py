@@ -26,10 +26,6 @@ class MariaDbConnection:
         if (self.conn != None):
             self.conn.close()
 
-class InvalidToken(Exception):
-    def __init__(self):
-        super().__init__("Invalid loginToken received")
-
 def validate_date(date_input):
     try:
         datetime.datetime.strptime(date_input, '%Y-%m-%d')
@@ -37,17 +33,16 @@ def validate_date(date_input):
         return False
     return True
 
+#Checks for invalid params/data sent
 def validate_misc_data(list, data):
-    #Checks for invalid params/data
     for key in data.keys():
         if key in list:
             continue
         else:
             return False
     return True
-    
+#Checks for required data
 def check_data_required(mydict, data):
-    #Check if required
     checklist=[]
     for item in mydict:
         if(item.get('required') == True):
@@ -77,7 +72,7 @@ def validate_data(mydict, data):
             if not chk:
                 raise ValueError("Please check your inputs. Type error was found.")
 
-            #Check for max char length
+            #Check for max character length
             maxLen = mydict[found_index]['maxLength']
             if(type(data.get(item)) == str and maxLen != None):
                 if(len(data.get(item)) > maxLen):
@@ -111,7 +106,7 @@ def get_users():
         content = {}
         for result in list:
             birthdate = result[5].strftime("%Y-%m-%d")
-            content = { 'id': result[0],
+            content = { 'userId': result[0],
                         'username': result[1],
                         'email' : result[3],
                         'bio' : result[4],
@@ -233,7 +228,22 @@ def create_new_user():
         return Response("Invalid date format. Please check data inputs",
                         mimetype="text/plain",
                         status=400)
-    resp = {
+
+    try:
+        cnnct_to_db = MariaDbConnection()
+        cnnct_to_db.connect()
+        cnnct_to_db.cursor.execute("INSERT INTO user(email, username, password, birthdate, bio, imageUrl, bannerUrl) VALUES(?,?,?,?,?,?,?);",[client_email,client_username,client_password,client_birthdate,client_bio,client_imageUrl,client_bannerUrl])
+        if(cnnct_to_db.cursor.rowcount == 1):
+            cnnct_to_db.conn.commit()
+        else:
+            return Response("Failed to update",
+                                mimetype="text/plain",
+                                status=400)
+        cnnct_to_db.cursor.execute("SELECT LAST_INSERT_ID();")
+        get_userId = cnnct_to_db.cursor.fetchone()
+
+        resp = {
+        "userId": get_userId[0],
         "email": client_email,
         "username": client_username,
         "password": client_password,
@@ -241,18 +251,7 @@ def create_new_user():
         "birthdate": client_birthdate,
         "imageUrl": client_imageUrl,
         "bannerUrl": client_bannerUrl
-    }
-
-    try:
-        cnnct_to_db = MariaDbConnection()
-        cnnct_to_db.connect()
-        cnnct_to_db.cursor.execute("INSERT INTO user(email, username, password, birthdate, bio, imageUrl, bannerUrl) VALUES(?,?,?,?,?,?,?)",[client_email,client_username,client_password,client_birthdate,client_bio,client_imageUrl,client_bannerUrl])
-        if(cnnct_to_db.cursor.rowcount == 1):
-            cnnct_to_db.conn.commit()
-        else:
-            return Response("Failed to update",
-                                mimetype="text/plain",
-                                status=400)
+        }
         return Response(json.dumps(resp),
                                 mimetype="application/json",
                                 status=201)  
@@ -381,7 +380,7 @@ def update_user_info():
         
         cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id=?", [id_match[0]])
         updated_user = cnnct_to_db.cursor.fetchone()
-        resp =  {'id': updated_user[0],
+        resp =  {'userId': updated_user[0],
                 'username': updated_user[1],
                 'email' : updated_user[3],
                 'bio' : updated_user[4],

@@ -215,7 +215,8 @@ def post_tweet_like():
             return Response("Failed to update",
                                 mimetype="text/plain",
                                 status=400)
-        return Response(mimetype="application/json",
+        return Response("Tweet liked",
+                        mimetype="text/plain",
                         status=204)  
     except ConnectionError:
         print("Error while attempting to connect to the database")
@@ -294,7 +295,9 @@ def delete_tweet_like():
             return Response("Failed to update",
                                 mimetype="text/plain",
                                 status=400)
-        return Response(mimetype="application/json",
+        
+        return Response("Tweet like removed",
+                        mimetype="text/plain",
                         status=204)  
     except ConnectionError:
         print("Error while attempting to connect to the database")
