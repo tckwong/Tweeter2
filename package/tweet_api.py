@@ -360,10 +360,13 @@ def update_tweet():
         return Response("Failed to update",
                                 mimetype="text/plain",
                                 status=400)
+    cnnct_to_db.cursor.execute("SELECT * FROM tweet WHERE id=?", [client_tweetId])
+    updated_tweet = cnnct_to_db.cursor.fetchone()
+    db_updated_tweet = updated_tweet[0]
     cnnct_to_db.endConn()
     
     resp = {
-        "tweetId" : client_tweetId,
+        "tweetId" : db_updated_tweet,
         "content" : client_content
     }
 

@@ -354,6 +354,9 @@ def update_comments():
         return Response("Failed to update",
                                 mimetype="text/plain",
                                 status=400)
+    cnnct_to_db.cursor.execute("SELECT content FROM comment WHERE id=?", [client_commentId])
+    updated_comment = cnnct_to_db.cursor.fetchone()
+    db_updated_comment = updated_comment[0]
     cnnct_to_db.endConn()
     
     resp = {
@@ -361,7 +364,7 @@ def update_comments():
         "tweetId": match_tweetId,
         "userId": match_userId,
         "username": match_username,
-        "content": match_content,
+        "content": db_updated_comment,
         "createdAt": match_createdAt
     }
     return Response(json.dumps(resp),
