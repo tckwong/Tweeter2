@@ -135,7 +135,7 @@ def get_users():
             content = {}
             for result in userIdMatch:
                 birthdate_serialized = result[5].strftime("%Y-%m-%d")
-                content = { 'id': result[0],
+                content = { 'userId': result[0],
                             'username': result[1],
                             'email' : result[3],
                             'bio' : result[4],
