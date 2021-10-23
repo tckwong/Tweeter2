@@ -108,18 +108,23 @@ def get_tweets():
                             mimetype="text/plain",
                             status=400)
     if (params_id is None):
-        cnnct_to_db.cursor.execute("SELECT * FROM tweet")
+        cnnct_to_db.cursor.execute("SELECT tweet.id, user.id, username, content, createdAt, imageUrl, tweetImageUrl FROM tweet INNER JOIN user ON tweet.userId = user.id")
         list = cnnct_to_db.cursor.fetchall()
+        print(list)
         tweet_list = []
         content = {}
         for result in list:
-            created_at = result[2]
+            created_at = result[4]
+            print(created_at)
             created_at_serialize = created_at.strftime("%Y-%m-%d %H:%M:%S")
+            print(created_at_serialize)
             content = { 'tweetId': result[0],
-                        'userId' : result[4],
-                        'content' : result[1],
+                        'userId' : result[1],
+                        'username': result[2],
+                        'content' : result[3],
                         'createdAt' : created_at_serialize,
-                        'tweetImageUrl' : result[3]
+                        'userImageUrl': result[5],
+                        'tweetImageUrl' : result[6]
                         }
             tweet_list.append(content)
         #Check if cursor opened and close all connections
@@ -131,12 +136,12 @@ def get_tweets():
         try:
             params_id = int(request.args.get("userId"))
         except ValueError:
-            return Response(json.dumps("Incorrect datatype received"),
+            return Response("Incorrect datatype received",
                                 mimetype="text/plain",
                                 status=200)
         if ((0< params_id<99999999)):
             try:
-                cnnct_to_db.cursor.execute("SELECT * FROM tweet WHERE userId=?", [params_id])
+                cnnct_to_db.cursor.execute("SELECT tweet.id, user.id, username, content, createdAt, imageUrl, tweetImageUrl FROM tweet INNER JOIN user ON tweet.userId = user.id WHERE userId=?", [params_id])
                 tweet_id_match = cnnct_to_db.cursor.fetchall()
                 print(tweet_id_match)            
             except mariadb.DataError:
@@ -154,14 +159,16 @@ def get_tweets():
             tweet_list = []
             content = {}
             for result in tweet_id_match:
-                created_at = result[2]
+                created_at = result[4]
                 created_at_serialize = created_at.strftime("%Y-%m-%d %H:%M:%S")
                 content = { 'tweetId': result[0],
-                            'userId' : result[4],
-                            'content' : result[1],
-                            'createdAt' : created_at_serialize,
-                            'tweetImageUrl' : result[3]
-                            }
+                        'userId' : result[1],
+                        'username': result[2],
+                        'content' : result[3],
+                        'createdAt' : created_at_serialize,
+                        'userImageUrl': result[5],
+                        'tweetImageUrl' : result[6]
+                        }
                 tweet_list.append(content)
             cnnct_to_db.endConn()
         else:

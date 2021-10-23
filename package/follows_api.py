@@ -120,7 +120,6 @@ def get_follows():
             try:
                 cnnct_to_db.cursor.execute("SELECT followed,email,username,bio,birthdate,imageUrl,bannerUrl FROM follow INNER JOIN user ON follow.followed = user.id WHERE follower=?", [params_id])
                 follower_match = cnnct_to_db.cursor.fetchall()
-                print(follower_match)
             except mariadb.DataError:
                 cnnct_to_db.endConn()
                 print("Something wrong with your data")
