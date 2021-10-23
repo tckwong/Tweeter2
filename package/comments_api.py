@@ -145,7 +145,7 @@ def get_comments():
             comment_list = []
             content = {}
             for result in tweet_id_match:
-                created_at = result[4]
+                created_at = result[5]
                 created_at_serialize = created_at.strftime("%Y-%m-%d %H:%M:%S")
                 content = { 'commentId': result[0],
                         'userId' : result[2],
