@@ -197,13 +197,7 @@ def post_tweet():
                 'datatype': str,
                 'maxLength': 200,
                 'required': True
-            },
-            {   
-                'name': 'imageUrl',
-                'datatype': str,
-                'maxLength': 150,
-                'required': False
-            },
+            }
         ]
 
         validate_data(requirements,data)
