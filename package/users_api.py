@@ -91,13 +91,7 @@ def get_users():
                                     mimetype="text/plain",
                                     status=400)
 
-    params = request.args
     params_id = request.args.get("userId")
-    checklist = ["userId"]
-    if not validate_misc_data(checklist,params):
-        return Response("Incorrect data keys received",
-                            mimetype="text/plain",
-                            status=400)
 
     if (params_id is None):
         cnnct_to_db.cursor.execute("SELECT * FROM user")
@@ -360,8 +354,7 @@ def update_user_info():
                 elif (key == "bio"):
                     cnnct_to_db.cursor.execute("UPDATE user SET bio =? WHERE user.id=?",[result,id_match[0]])
                 elif (key == "birthdate"):
-                    birthdate_serialized = result.strftime("%Y-%m-%d")
-                    cnnct_to_db.cursor.execute("UPDATE user SET birthdate =? WHERE user.id=?",[birthdate_serialized,id_match[0]])
+                    cnnct_to_db.cursor.execute("UPDATE user SET birthdate =? WHERE user.id=?",[result,id_match[0]])
                 elif (key == "imageUrl"):
                     cnnct_to_db.cursor.execute("UPDATE user SET imageUrl =? WHERE user.id=?",[result,id_match[0]])
                 elif (key == "bannerUrl"):
@@ -369,21 +362,19 @@ def update_user_info():
                 else:
                     print("Error happened with inputs")
 
-                if(cnnct_to_db.cursor.rowcount == 1):
-                    cnnct_to_db.conn.commit()
-                else:
-                    return Response("Failed to update",
-                                    mimetype="text/plain",
-                                    status=400)
             else:
                 continue
+    
+        cnnct_to_db.conn.commit()
         
         cnnct_to_db.cursor.execute("SELECT * FROM user WHERE id=?", [id_match[0]])
         updated_user = cnnct_to_db.cursor.fetchone()
+        print(updated_user)
         resp =  {'userId': updated_user[0],
                 'username': updated_user[1],
                 'email' : updated_user[3],
                 'bio' : updated_user[4],
+                'birthdate' : updated_user[5].strftime("%Y-%m-%d"),
                 'imageUrl' : updated_user[6],
                 'bannerUrl' : updated_user[7]
                 }
