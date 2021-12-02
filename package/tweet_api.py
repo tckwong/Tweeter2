@@ -200,8 +200,8 @@ def post_tweet():
             }
         ]
 
-        validate_data(requirements,data)
-        check_data_required(requirements,data)
+        # validate_data(requirements,data)
+        # check_data_required(requirements,data)
         
     except InvalidData:
         return Response("Invalid data sent",

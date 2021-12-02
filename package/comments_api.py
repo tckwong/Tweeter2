@@ -154,7 +154,7 @@ def get_comments():
                         'content' : result[4],
                         'createdAt': created_at_serialize
                         }
-            comment_list.append(content)
+                comment_list.append(content)
             cnnct_to_db.endConn()
         else:
             cnnct_to_db.endConn()
