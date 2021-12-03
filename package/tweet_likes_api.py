@@ -147,10 +147,10 @@ def get_tweet_likes():
             
             for result in tweet_id_match:
                 content = { 'tweetId': result[0],
-                        'userId': result[1],
-                        'username' : result[2],
+                            'userId': result[1],
+                            'username' : result[2],
                         }
-            user_list.append(content)
+                user_list.append(content)
             cnnct_to_db.endConn()
         else:
             cnnct_to_db.endConn()
