@@ -123,7 +123,7 @@ def get_tweet_likes():
                                         status=400)
         if ((0< params_id<99999999)):
             try:
-                cnnct_to_db.cursor.execute("SELECT tweet_like.tweetId, tweet_like.id, username FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id WHERE tweetId=? ", [params_id])
+                cnnct_to_db.cursor.execute("SELECT tweet_like.tweetId, user.id, username FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id WHERE tweetId=? ", [params_id])
                 tweet_id_match = cnnct_to_db.cursor.fetchall()
 
                 if(cnnct_to_db.cursor.rowcount == 0):
