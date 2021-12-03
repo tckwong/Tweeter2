@@ -96,7 +96,7 @@ def get_tweet_likes():
                                     mimetype="text/plain",
                                     status=400)
     if (params_id is None):
-        cnnct_to_db.cursor.execute("SELECT tweet_like.tweetId, tweet_like.id, username FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id")
+        cnnct_to_db.cursor.execute("SELECT tweet_like.tweetId, user.id, username FROM tweet_like INNER JOIN user ON tweet_like.userId = user.id")
         list = cnnct_to_db.cursor.fetchall()
         
         tweet_like_list = []
